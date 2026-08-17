@@ -49,3 +49,6 @@ npm run dist       # 打包出 Windows 安装程序（dist 目录）
 - 全部画面：Box / Cylinder / Plane / Torus 等基础几何体 + 发光材质
 - 全部音效：WebAudio 振荡器 + 噪声现场合成
 - 单个 `index.html` 即完整游戏
+## 自动更新
+
+安装版（Setup）内置自动更新：每次启动会检查 GitHub Release 的新版本，发现更新会提示一键重启升级。便携版（单文件 exe）不支持自动更新，属于 Electron 限制。
