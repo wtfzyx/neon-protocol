@@ -1,0 +1,2333 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>霓虹协议 · Neon Protocol（P7 完整版）</title>
+<style>
+  /* ===== 基础：去掉默认边距，防止页面滚动 ===== */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #05050d; font-family: "Microsoft YaHei", "PingFang SC", sans-serif; color: #e8f6ff; }
+
+  /* ===== 3D 画布：铺满整个窗口 ===== */
+  #gameCanvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+
+  /* ===== 准星：4 根短线 + 中心点，用 CSS 画的 ===== */
+  #crosshair { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 34px; height: 34px; pointer-events: none; z-index: 10; opacity: 0; }
+  #crosshair .line { position: absolute; background: #7dffd6; box-shadow: 0 0 6px rgba(0, 255, 200, .9); }
+  #crosshair .l1 { left: 50%; top: 0; width: 2px; height: 10px; transform: translateX(-50%); }
+  #crosshair .l2 { left: 50%; bottom: 0; width: 2px; height: 10px; transform: translateX(-50%); }
+  #crosshair .l3 { top: 50%; left: 0; height: 2px; width: 10px; transform: translateY(-50%); }
+  #crosshair .l4 { top: 50%; right: 0; height: 2px; width: 10px; transform: translateY(-50%); }
+  #crosshair .dot { position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; transform: translate(-50%, -50%); background: #fff; border-radius: 50%; box-shadow: 0 0 6px #fff; }
+
+  /* ===== 命中标记：打中训练靶时闪一下的 ✕ ===== */
+  #hitMarker { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: 26px; color: #ff5d5d; text-shadow: 0 0 8px #ff0000; pointer-events: none; z-index: 11; opacity: 0; }
+  #hitMarker.show { animation: hitAnim .25s ease-out forwards; }
+  @keyframes hitAnim { 0% { opacity: 1; transform: translate(-50%, -50%) scale(1.6); } 100% { opacity: 0; transform: translate(-50%, -50%) scale(.6); } }
+
+  /* ===== 受击红闪 + 阵亡提示（P3） ===== */
+  #damageFlash { position: fixed; inset: 0; pointer-events: none; z-index: 8; background: radial-gradient(ellipse at center, rgba(255, 0, 40, 0) 40%, rgba(255, 0, 40, .55) 100%); opacity: 0; }
+  #damageFlash.show { animation: dmgAnim .35s ease-out forwards; }
+  @keyframes dmgAnim { 0% { opacity: 1; } 100% { opacity: 0; } }
+
+  /* ===== 结算界面（P7） ===== */
+  #resultOverlay { position: fixed; inset: 0; z-index: 22; display: flex; flex-direction: column; align-items: center; justify-content: center; background: radial-gradient(ellipse at center, rgba(30, 5, 20, .88) 0%, rgba(4, 2, 10, .96) 70%); text-align: center; }
+  #resultOverlay.hidden { display: none; }
+  #resultOverlay h2 { font-size: 46px; letter-spacing: 10px; color: #ff4466; text-shadow: 0 0 24px rgba(255, 0, 60, .8); margin-bottom: 26px; }
+  #resultOverlay .result-row { font-size: 20px; color: #e8f6ff; line-height: 2.2; letter-spacing: 2px; }
+  #resultOverlay .result-row span { color: #ffd76a; font-weight: bold; }
+  #resultOverlay .result-tip { margin-top: 30px; font-size: 16px; color: #9db8d8; }
+  #resultOverlay .result-tip b { color: #7dffd6; font-weight: normal; }
+
+  /* ===== 开始 / 暂停遮罩 ===== */
+  #overlay { position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column; align-items: center; justify-content: center; background: radial-gradient(ellipse at center, rgba(20, 10, 50, .92) 0%, rgba(2, 2, 10, .97) 70%); text-align: center; }
+  #overlay.hidden { display: none; }
+  #overlay h1 { font-size: 52px; letter-spacing: 8px; background: linear-gradient(90deg, #00f0ff, #ff4dff); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 6px; }
+  #overlay .sub { color: #9db8d8; letter-spacing: 4px; margin-bottom: 28px; font-size: 15px; }
+  #overlay .tips { color: #b9cfe8; font-size: 14px; line-height: 2.1; margin-bottom: 34px; }
+  #overlay .tips b { color: #7dffd6; font-weight: normal; }
+  #startBtn { padding: 14px 46px; font-size: 20px; letter-spacing: 6px; color: #04121a; background: linear-gradient(90deg, #00f0ff, #6cffb0); border: none; border-radius: 6px; cursor: pointer; font-weight: bold; box-shadow: 0 0 24px rgba(0, 240, 255, .6); transition: transform .15s, box-shadow .15s; }
+  #startBtn:hover { transform: scale(1.06); box-shadow: 0 0 36px rgba(0, 240, 255, .9); }
+
+  /* ===== 常驻 HUD（左上角标题 + 左下角操作提示） ===== */
+  #hudTitle { position: fixed; left: 18px; top: 14px; font-size: 15px; letter-spacing: 2px; color: #7dffd6; text-shadow: 0 0 8px rgba(0, 255, 200, .6); pointer-events: none; z-index: 5; }
+  #hudTitle small { color: #9db8d8; margin-left: 10px; letter-spacing: 1px; }
+  #controlsHint { position: fixed; left: 14px; top: 92px; font-size: 12px; color: #8fa8c8; line-height: 1.9; text-shadow: 0 0 6px rgba(0, 0, 0, .8); pointer-events: none; z-index: 5; }
+  #controlsHint b { color: #d5e9ff; font-weight: normal; }
+
+  /* ===== 击杀统计（P6） ===== */
+  #killBox { position: fixed; right: 18px; top: 14px; z-index: 5; text-align: right; font-size: 13px; color: #e8f6ff; text-shadow: 0 0 6px rgba(0, 0, 0, .9); pointer-events: none; line-height: 1.7; }
+  #killBox span { margin-left: 12px; }
+  #streakCount { color: #ff9d5c; }
+
+  /* ===== 等级 + 经验条（P4） ===== */
+  #levelBox { position: fixed; left: 18px; top: 44px; z-index: 5; display: flex; align-items: center; gap: 8px; pointer-events: none; }
+  #levelText { font-size: 16px; color: #ffd76a; text-shadow: 0 0 8px rgba(255, 200, 60, .8); letter-spacing: 1px; min-width: 46px; }
+  .xp-bg { width: 160px; height: 12px; background: rgba(10, 14, 28, .85); border: 1px solid rgba(255, 200, 100, .35); border-radius: 3px; overflow: hidden; box-shadow: inset 0 0 6px rgba(0, 0, 0, .8); }
+  .xp-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #ffb347, #ffe259); box-shadow: 0 0 8px rgba(255, 200, 80, .7); transition: width .15s linear; }
+  #xpText { font-size: 12px; color: #ffe9b8; text-shadow: 0 0 4px rgba(0, 0, 0, .9); }
+
+  /* ===== 等级提升提示（P4） ===== */
+  #levelUpMsg { position: fixed; left: 50%; top: 34%; transform: translateX(-50%); font-size: 38px; color: #ffd76a; letter-spacing: 8px; text-shadow: 0 0 20px rgba(255, 180, 60, .95); z-index: 9; pointer-events: none; opacity: 0; }
+  #levelUpMsg.show { animation: levelUpAnim 1.6s ease-out forwards; }
+  @keyframes levelUpAnim { 0% { opacity: 0; transform: translateX(-50%) scale(1.6); } 15% { opacity: 1; transform: translateX(-50%) scale(1); } 80% { opacity: 1; } 100% { opacity: 0; } }
+
+  /* ===== 血条 + 体力条（P2） ===== */
+  #statusBars { position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%); width: 320px; z-index: 6; pointer-events: none; display: flex; flex-direction: column; gap: 8px; }
+  .bar-row { display: flex; align-items: center; gap: 8px; }
+  .bar-label { width: 34px; text-align: right; font-size: 12px; color: #cfdfff; text-shadow: 0 0 4px rgba(0, 0, 0, .9); }
+  .bar-bg { flex: 1; height: 16px; background: rgba(10, 14, 28, .85); border: 1px solid rgba(140, 200, 255, .35); border-radius: 3px; overflow: hidden; box-shadow: inset 0 0 6px rgba(0, 0, 0, .8); }
+  .bar-fill { height: 100%; width: 100%; }
+  .bar-fill.health { background: linear-gradient(90deg, #ff2d55, #ff6b6b); box-shadow: 0 0 10px rgba(255, 45, 85, .7); transition: width .12s linear; }
+  .bar-fill.stamina { background: linear-gradient(90deg, #00e5ff, #6cffb0); box-shadow: 0 0 10px rgba(0, 229, 255, .7); transition: width .08s linear; }
+  .bar-text { width: 56px; font-size: 12px; color: #eaf6ff; text-shadow: 0 0 4px rgba(0, 0, 0, .9); }
+
+  /* ===== 武器信息（P5） ===== */
+  #weaponBox { position: fixed; right: 20px; bottom: 24px; z-index: 6; text-align: right; pointer-events: none; }
+  #weaponName { font-size: 18px; color: #7dffd6; text-shadow: 0 0 8px rgba(0, 255, 200, .6); letter-spacing: 2px; }
+  #weaponAmmo { font-size: 20px; color: #ffffff; text-shadow: 0 0 8px rgba(0, 0, 0, .9); margin-top: 2px; }
+  #weaponAmmo.low { color: #ff6b6b; }
+  #reloadHint { font-size: 13px; color: #ffd76a; margin-top: 4px; animation: reloadBlink .5s steps(2) infinite; }
+  #reloadHint.hidden { display: none; }
+  @keyframes reloadBlink { 0% { opacity: 1; } 100% { opacity: .2; } }
+
+  /* ===== 连杀播报（P6） ===== */
+  #killstreakMsg { position: fixed; left: 50%; top: 28%; transform: translateX(-50%); font-size: 56px; color: #ff5d5d; letter-spacing: 10px; text-shadow: 0 0 26px rgba(255, 60, 60, 1), 0 0 60px rgba(255, 120, 0, .6); z-index: 9; pointer-events: none; opacity: 0; }
+  #killstreakMsg.show { animation: ksAnim 1.8s ease-out forwards; }
+  @keyframes ksAnim { 0% { opacity: 0; transform: translateX(-50%) scale(2); } 12% { opacity: 1; transform: translateX(-50%) scale(1); } 80% { opacity: 1; } 100% { opacity: 0; } }
+
+  /* ===== 狙击镜遮罩（P5 补充） ===== */
+  #scopeOverlay { position: fixed; inset: 0; z-index: 7; pointer-events: none; opacity: 0; transition: opacity .12s; }
+  #scopeOverlay.show { opacity: 1; }
+  #scopeOverlay::before { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at center, rgba(0, 0, 0, 0) 34%, rgba(0, 0, 0, .82) 70%); }
+  #scopeOverlay .scope-ring { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 46vmin; height: 46vmin; border: 2px solid rgba(0, 0, 0, .9); border-radius: 50%; box-shadow: 0 0 0 1px rgba(255, 255, 255, .25), inset 0 0 0 1px rgba(255, 255, 255, .15); }
+  #scopeOverlay .scope-ring::before, #scopeOverlay .scope-ring::after { content: ''; position: absolute; background: rgba(0, 0, 0, .85); }
+  #scopeOverlay .scope-ring::before { left: 50%; top: -4vmin; width: 2px; height: calc(100% + 8vmin); transform: translateX(-50%); }
+  #scopeOverlay .scope-ring::after { top: 50%; left: -4vmin; height: 2px; width: calc(100% + 8vmin); transform: translateY(-50%); }
+
+  /* ===== 报错信息（万一初始化失败，直接显示在页面上） ===== */
+  #errMsg { display: none; position: fixed; inset: 0; z-index: 99; background: #1a0000; color: #ff8080; padding: 40px; font-size: 16px; line-height: 2; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+
+  <!-- 3D 画布 -->
+  <canvas id="gameCanvas"></canvas>
+
+  <!-- 常驻 HUD -->
+  <div id="hudTitle">霓虹协议 <small>P7 · 完整版</small></div>
+
+  <!-- 等级 + 经验条（P4） -->
+  <div id="levelBox">
+    <span id="levelText">Lv.1</span>
+    <div class="xp-bg"><div id="xpFill" class="xp-fill"></div></div>
+    <span id="xpText">0/100</span>
+  </div>
+  <!-- 按键提示：左侧竖排小字（P5 补充排版） -->
+  <div id="controlsHint">
+    <b>WASD</b> 移动<br>
+    <b>Shift</b> 冲刺<br>
+    <b>Ctrl</b> 滑铲<br>
+    <b>空格</b> 跳<br>
+    <b>左键</b> 射击<br>
+    <b>1/2/3</b> 切枪<br>
+    <b>R</b> 换弹<br>
+    <b>G</b> 狙击镜<br>
+    <b>Esc</b> 暂停
+  </div>
+
+  <!-- 击杀统计（P6） -->
+  <div id="killBox">
+    <span id="killCount">击杀 0</span>
+    <span id="streakCount">连杀 0</span>
+  </div>
+
+  <!-- 血条 + 体力条（P2） -->
+  <div id="statusBars">
+    <div class="bar-row">
+      <span class="bar-label">生命</span>
+      <div class="bar-bg"><div id="healthFill" class="bar-fill health"></div></div>
+      <span id="healthText" class="bar-text">100/100</span>
+    </div>
+    <div class="bar-row">
+      <span class="bar-label">体力</span>
+      <div class="bar-bg"><div id="staminaFill" class="bar-fill stamina"></div></div>
+      <span id="staminaText" class="bar-text">100/100</span>
+    </div>
+  </div>
+
+  <!-- 武器信息（P5） -->
+  <div id="weaponBox">
+    <div id="weaponName">步枪</div>
+    <div id="weaponAmmo">30/30</div>
+    <div id="reloadHint" class="hidden">换弹中…</div>
+  </div>
+
+  <!-- 准星 -->
+  <div id="crosshair">
+    <div class="line l1"></div>
+    <div class="line l2"></div>
+    <div class="line l3"></div>
+    <div class="line l4"></div>
+    <div class="dot"></div>
+  </div>
+
+  <!-- 命中标记 -->
+  <div id="hitMarker">✕</div>
+
+  <!-- 受击红闪（P3）+ 升级提示（P4） -->
+  <div id="damageFlash"></div>
+  <div id="levelUpMsg">等级提升！</div>
+
+  <!-- 连杀播报（P6）+ 狙击镜遮罩（P5 补充） -->
+  <div id="killstreakMsg"></div>
+  <div id="scopeOverlay"><div class="scope-ring"></div></div>
+
+  <!-- 开始 / 暂停遮罩 -->
+  <div id="overlay">
+    <h1>霓虹协议</h1>
+    <div class="sub">NEON PROTOCOL · P2 身体系统版</div>
+    <div class="tips">
+      科技风竞技场 · 第一人称 · 射线射击 · 敌方 AI<br>
+      <b>WASD</b> 移动 ｜ <b>鼠标</b> 视角 ｜ <b>左键</b> 射击 ｜ <b>Shift</b> 冲刺 ｜ <b>Ctrl</b> 滑铲 ｜ <b>空格</b> 跳跃<br>
+      5 个机器人会巡逻，发现你后追击开枪（有命中率），脱战会回巡逻；打爆它们会爆炸并延迟重生<br>
+      命中敌人 +5 经验、击杀 +20 经验；升级回满血，枪械伤害 +10%<br>
+      <b>1</b> 步枪连发 ｜ <b>2</b> 霰弹枪散射 5 发 ｜ <b>3</b> 狙击枪高伤慢速 ｜ 各有弹匣，<b>R</b> 换弹<br>
+      狙击枪按 <b>G</b> 开镜瞄准；连杀 3 / 5 / 10 会全屏播报<br>
+      死亡后会显示本局击杀数与存活时间，按 <b>R</b> 重开
+    </div>
+    <button id="startBtn">点击开始</button>
+  </div>
+
+  <!-- 结算界面（P7） -->
+  <div id="resultOverlay" class="hidden">
+    <h2>机体损毁</h2>
+    <div class="result-row">本局击杀：<span id="resultKills">0</span></div>
+    <div class="result-row">存活时间：<span id="resultTime">00:00</span></div>
+    <div class="result-row">最终等级：<span id="resultLevel">Lv.1</span></div>
+    <div class="result-tip">按 <b>R</b> 重开</div>
+  </div>
+
+  <!-- 报错信息 -->
+  <div id="errMsg"></div>
+
+  <!-- Three.js r152：优先用同目录的本地文件（离线也能跑），本地没有就自动退回 CDN -->
+  <script src="three.min.js" onerror="this.remove();var s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/three.js/0.152.2/three.min.js';document.head.appendChild(s);"></script>
+
+  <script>
+  'use strict';
+
+  // ============================================================
+  //  霓虹协议 · P5 武器系统
+  //  功能：科技风竞技场（发光网格地面/霓虹柱子/雾效/大场地）
+  //        第一人称视角 / WASD 移动 / 鼠标视角(Pointer Lock)
+  //        左键射线射击 / 准星 / 弹道与火花特效 / 训练靶
+  //        生命 100 / Shift 冲刺 / Ctrl 滑铲 / 空格跳跃 / 体力自动恢复
+  //        血条 + 体力条 HUD
+  //        5 个机器人：巡逻 → 追击开枪(有命中率) → 脱战回巡逻 / 血条 / 死亡爆炸重生
+  //        命中 +5 经验 / 击杀 +20 经验 / 升级回满血 / 枪械伤害每级 +10% / 等级 + 经验条
+  //        武器：步枪(1)连发 / 霰弹枪(2)散射5发 / 狙击枪(3)高伤慢速 / 各自射速·弹匣·换弹·枪声
+  //        狙击枪 G 键开镜 / 敌人死亡爆炸音 / 玩家死亡低沉音 / 连杀播报(3双杀·5三杀·10大杀特杀)
+  //        结算：死亡后显示本局击杀数 / 存活时间 / 最终等级，按 R 重开
+  //  技术：全部用 Three.js 基础几何体 + 发光材质，不下载任何模型贴图
+  //  音效：WebAudio 现场合成（本阶段只有激光枪声）
+  // ============================================================
+
+  // ---------- 1. 全局变量 ----------
+  let renderer, scene, camera, clock;   // Three.js 核心对象
+
+  // 玩家状态（位置 / 朝向）
+  const player = {
+    pos: new THREE.Vector3(0, 0, 22),   // 出生点：地图南侧、中央平台外，面朝中心（y 是脚底高度，视线高度另外加）
+    yaw: Math.PI,                       // 水平朝向（弧度），初始面向 +Z
+    pitch: 0,                           // 垂直朝向（弧度）
+    velY: 0,                            // 竖直方向速度（跳跃/重力用）
+    onGround: true                      // 是否站在地面上
+  };
+
+  // 键位状态：记录 W/A/S/D、Shift 是否被按住
+  const keys = { forward: false, back: false, left: false, right: false, shift: false };
+
+  let locked = false;                   // 鼠标是否被锁定（指针锁定状态）
+
+  // 射击相关
+  const raycaster = new THREE.Raycaster();
+  const shootables = [];                // 所有能被射线打中的物体
+  const targets = [];                   // 训练靶列表（打中会闪白）
+  const tracers = [];                   // 弹道光列表（会自己消失）
+  const sparkSystems = [];              // 火花粒子列表（会自己消失）
+  // （射击冷却已改为每把武器各自的配置，见 1.8 的 WEAPONS）
+  let fireCooldown = 0;                 // 当前剩余冷却时间
+  let recoil = 0;                       // 枪口后坐动画进度（0~1）
+
+  // 场景里的障碍物（圆形碰撞用）
+  const obstacles = [];
+
+  // 霓虹柱子（用来做呼吸灯动画）
+  const pillars = [];
+  let time = 0;                         // 全局时间（秒），动画用
+
+  // 枪（挂在相机上）与枪口特效
+  let gun = null;
+  let gunTip = null;                    // 枪口世界坐标标记点
+  let muzzleFlash = null;               // 枪口闪光小球
+  let muzzleLight = null;               // 枪口闪光灯光
+  let muzzleFlashLife = 0;              // 枪口闪光剩余时间
+
+  // 音效
+  let audioCtx = null;
+  let noiseBuffer = null;
+
+  // ---------- 1.5 身体参数（P2：生命 / 体力 / 冲刺 / 滑铲 / 跳跃） ----------
+  // 生命
+  let health = 100;                 // 当前生命
+  const MAX_HEALTH = 100;           // 生命上限
+
+  // 体力
+  let stamina = 100;                // 当前体力
+  const MAX_STAMINA = 100;          // 体力上限
+  let staminaRegenDelay = 0;        // 体力恢复倒计时（停止消耗后开始倒数）
+  const SPRINT_DRAIN = 25;          // 冲刺每秒消耗体力
+  const STAMINA_REGEN = 15;         // 体力每秒恢复量
+  const STAMINA_REGEN_DELAY = 0.6;  // 停止消耗后，过多久开始恢复（秒）
+
+  // 移动速度
+  const WALK_SPEED = 9;             // 走路速度（米/秒）
+  const SPRINT_SPEED = 13;          // 冲刺速度（米/秒）
+  const SLIDE_SPEED = 15;           // 滑铲速度（米/秒）
+  const SLIDE_DURATION = 0.6;       // 滑铲持续时间（秒）
+  const SLIDE_COST = 20;            // 一次滑铲消耗体力
+
+  // 跳跃
+  const GRAVITY = 20;               // 重力加速度（米/秒²）
+  const JUMP_VELOCITY = 7.5;        // 起跳初速度（米/秒），大约能跳 1.4 米高
+
+  // 眼睛高度
+  const EYE_NORMAL = 1.7;           // 站立时视线高度
+  const EYE_SLIDE = 0.8;            // 滑铲时视线高度
+
+  // 身体状态
+  let sprinting = false;            // 是否正在冲刺
+  let sliding = false;              // 是否正在滑铲
+  let slideTime = 0;                // 滑铲剩余时间（秒）
+  let eyeHeight = EYE_NORMAL;       // 当前眼睛高度（平滑过渡用）
+
+  // ---------- 1.6 敌人与战斗参数（P3） ----------
+  const enemies = [];               // 敌人列表
+  const blockers = [];              // 会挡住视线的障碍物（掩体/柱子/平台/墙）
+  const explosionFlashes = [];      // 爆炸闪光球列表（会自己消失）
+  const ENEMY_SPAWNS = [[-35, -30], [35, -28], [-33, 32], [33, 32], [0, -42]];
+  const ENEMY_MAX_HP = 60;          // 敌人血量
+  const PLAYER_DAMAGE = 10;         // 玩家每发子弹伤害
+  const ENEMY_DAMAGE = 8;           // 敌人每发子弹伤害
+  const ENEMY_ACCURACY = 0.45;      // 敌人命中率（0~1）
+  const ENEMY_FIRE_COOLDOWN = 0.9;  // 敌人开火间隔（秒）
+  const ENEMY_RESPAWN_TIME = 5;     // 敌人死亡后多少秒重生
+  const DETECT_RADIUS = 30;         // 发现 / 丢失玩家的距离
+  const LOSE_TIME = 2.5;            // 看不到玩家多久后脱战（秒）
+  const FIRE_RANGE = 40;            // 敌人开火距离
+  const STOP_DIST = 7;              // 敌人追击时保持的最小距离
+  const PATROL_SPEED = 3.2;         // 敌人巡逻速度
+  const CHASE_SPEED = 6.5;          // 敌人追击速度
+  const BAR_COLOR_HP = new THREE.Color(0x44ff88);   // 血条满血颜色
+  const BAR_COLOR_LOW = new THREE.Color(0xff3355);  // 血条残血颜色
+  const enemyRay = new THREE.Raycaster();            // 敌人专用的射线
+  let playerDead = false;           // 玩家是否阵亡
+  let runTime = 0;                  // 本局存活时间（秒，P7 结算用）
+  let playerHitbox = null;          // 玩家受击判定球（看不见）
+
+  // ---------- 1.7 成长系统（P4：经验 / 等级 / 升级奖励） ----------
+  let level = 1;                    // 当前等级（从 1 级开始）
+  let xp = 0;                       // 当前经验
+  const HIT_XP = 5;                 // 命中敌人 +5 经验
+  const KILL_XP = 20;               // 击杀敌人 +20 经验
+  const LEVEL_XP_BASE = 100;        // 1 级升 2 级需要 100 经验
+  const LEVEL_XP_GROWTH = 50;       // 之后每升一级再多要 50 经验
+
+  // ---------- 1.8 武器系统（P5：步枪 / 霰弹枪 / 狙击枪） ----------
+  const WEAPONS = {
+    rifle: {
+      name: '步枪', damage: 10, fireCooldown: 0.12, auto: true,
+      pellets: 1, spread: 0.006, magSize: 30, reloadTime: 1.2,
+      recoil: 1, tracerColor: 0x88ffff, tracerLife: 0.07, sound: 'rifle'
+    },
+    shotgun: {
+      name: '霰弹枪', damage: 8, fireCooldown: 0.9, auto: false,
+      pellets: 5, spread: 0.045, magSize: 8, reloadTime: 1.8,
+      recoil: 2.2, tracerColor: 0xffaa33, tracerLife: 0.06, sound: 'shotgun'
+    },
+    sniper: {
+      name: '狙击枪', damage: 50, fireCooldown: 1.4, auto: false,
+      pellets: 1, spread: 0.0, magSize: 5, reloadTime: 2.2,
+      recoil: 3.0, tracerColor: 0xff6bff, tracerLife: 0.1, sound: 'sniper'
+    }
+  };
+  let weaponId = 'rifle';               // 当前武器
+  const weaponAmmo = {};                // 每把枪各自的弹匣余量
+  for (const k in WEAPONS) weaponAmmo[k] = WEAPONS[k].magSize;
+  let magAmmo = WEAPONS.rifle.magSize;  // 当前弹匣剩余
+  let reloading = false;                // 是否正在换弹
+  let reloadTimer = 0;                  // 换弹剩余时间
+  let mouseHeld = false;                // 左键是否按住（连发用）
+  let sniperZoomed = false;             // 是否开着狙击镜（P5 补充）
+  let killstreak = 0;                   // 当前连杀数（死亡清零）
+  let totalKills = 0;                   // 本局总击杀数（P7 结算用）
+
+  // ---------- 2. 初始化：渲染器 / 场景 / 相机 ----------
+
+  // 创建 WebGL 渲染器，负责把 3D 画面画到屏幕上
+  function initRenderer() {
+    renderer = new THREE.WebGLRenderer({
+      canvas: document.getElementById('gameCanvas'),
+      antialias: true                    // 抗锯齿，边缘更平滑
+    });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // 限制像素比，防止低配电脑卡
+    renderer.outputColorSpace = THREE.SRGBColorSpace;             // 颜色输出更自然
+  }
+
+  // 创建场景：场景是存放所有 3D 物体的“大盒子”
+  function initScene() {
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x060614); // 深蓝黑背景
+    scene.fog = new THREE.Fog(0x060614, 35, 110); // 雾效：远处物体渐渐隐没，更有纵深
+
+    // 基础灯光：保证场景不会全黑
+    const ambient = new THREE.AmbientLight(0x88aaff, 0.35);
+    scene.add(ambient);
+
+    const hemi = new THREE.HemisphereLight(0x88ccff, 0x220033, 0.7);
+    scene.add(hemi);
+
+    // 几盏彩色点光源，营造霓虹氛围
+    addNeonLight(0xff00aa, new THREE.Vector3(-45, 8, -45), 60);
+    addNeonLight(0x00e5ff, new THREE.Vector3(45, 8, 45), 60);
+    addNeonLight(0xaa66ff, new THREE.Vector3(0, 12, 0), 90);
+  }
+
+  // 在指定位置放一盏彩色点光源（帮助照亮附近的霓虹物体）
+  function addNeonLight(color, position, distance) {
+    const light = new THREE.PointLight(color, 1.2, distance, 2);
+    light.position.copy(position);
+    scene.add(light);
+  }
+
+  // 创建第一人称相机：视野 75 度，近裁剪 0.1，远裁剪 200
+  function initCamera() {
+    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 200);
+    camera.position.copy(player.pos);
+    applyCameraRotation();
+    scene.add(camera); // 相机也加入场景，这样挂在相机上的“枪”才能被渲染
+  }
+
+  // 把玩家视角（yaw/pitch）应用到相机上
+  function applyCameraRotation() {
+    camera.rotation.order = 'YXZ'; // 先水平后垂直旋转，避免万向锁导致画面翻转
+    camera.rotation.y = player.yaw;
+    camera.rotation.x = player.pitch;
+  }
+  // ---------- 3. 搭建竞技场 ----------
+
+  // 总入口：地面 / 围墙 / 中央平台 / 柱子 / 掩体 / 训练靶 全部在这里创建
+  function buildArena() {
+    createGridFloor();   // 发光网格地面
+    createWalls();       // 四周发光围墙
+    createCenterStage(); // 中央圆形平台
+    createPillars();     // 霓虹柱子
+    createCrates();      // 掩体箱子
+    createTargets();     // 训练靶
+    createEnemies();     // 敌人机器人（P3）
+  }
+
+  // 生成“发光网格地面”：底层深色大平面 + 上层半透明发光网格
+  function createGridFloor() {
+    const SIZE = 120; // 场地尺寸（120 x 120 米，够大）
+
+    // 1) 深色地面
+    const base = new THREE.Mesh(
+      new THREE.PlaneGeometry(SIZE, SIZE),
+      new THREE.MeshStandardMaterial({ color: 0x0a0a18, roughness: 0.85, metalness: 0.25 })
+    );
+    base.rotation.x = -Math.PI / 2;
+    scene.add(base);
+    shootables.push(base);
+
+    // 2) 发光网格：用 Canvas 现场画一张网格图（不需要下载图片）
+    const gridTex = makeGridTexture();
+    const grid = new THREE.Mesh(
+      new THREE.PlaneGeometry(SIZE, SIZE),
+      new THREE.MeshBasicMaterial({
+        map: gridTex,
+        transparent: true,
+        opacity: 0.85,
+        blending: THREE.AdditiveBlending, // 加法混合：颜色越叠越亮，产生发光感
+        depthWrite: false                 // 不写深度，避免挡住后面的物体
+      })
+    );
+    grid.rotation.x = -Math.PI / 2;
+    grid.position.y = 0.03; // 稍微抬高一点点，避免和地面“打架”（z-fighting 闪烁）
+    scene.add(grid);
+  }
+
+  // 用 Canvas 现场画一张霓虹网格图，返回 THREE.CanvasTexture
+  function makeGridTexture() {
+    const size = 1024;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+
+    // 深色底
+    ctx.fillStyle = '#05050f';
+    ctx.fillRect(0, 0, size, size);
+
+    // 细网格线（带一点发光效果）
+    const cell = 128;
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(0, 230, 255, 0.5)';
+    ctx.shadowColor = '#00e6ff';
+    ctx.shadowBlur = 8;
+    for (let i = 0; i <= size; i += cell) {
+      ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, size); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(size, i); ctx.stroke();
+    }
+
+    // 每隔 4 格画一条更亮的主线
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = 'rgba(0, 255, 255, 0.9)';
+    ctx.shadowBlur = 14;
+    for (let i = 0; i <= size; i += cell * 4) {
+      ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, size); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(size, i); ctx.stroke();
+    }
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.anisotropy = 4; // 各向异性过滤：斜着看地面时网格更清晰
+    return tex;
+  }
+
+  // 在场地四周建 4 面围墙，顶上有一圈发光灯条
+  function createWalls() {
+    const HALF = 60; // 半场尺寸
+    const H = 5;     // 墙高
+    const T = 1;     // 墙厚
+    const wallMat = new THREE.MeshStandardMaterial({ color: 0x0c0c1e, roughness: 0.7, metalness: 0.4 });
+    const edgeMat = new THREE.MeshStandardMaterial({ color: 0x111133, emissive: 0x00e5ff, emissiveIntensity: 1.6 });
+
+    // 内部函数：建一面墙 + 顶部发光条
+    function makeWall(w, d, x, z) {
+      const wall = new THREE.Mesh(new THREE.BoxGeometry(w, H, d), wallMat);
+      wall.position.set(x, H / 2, z);
+      scene.add(wall);
+      shootables.push(wall);
+      blockers.push(wall); // 敌人视线的遮挡物
+
+      const edge = new THREE.Mesh(new THREE.BoxGeometry(w, 0.25, 0.5), edgeMat);
+      edge.position.set(x, H + 0.15, z);
+      scene.add(edge);
+      shootables.push(edge);
+    }
+
+    makeWall(120 + T * 2, T, 0, -HALF); // 南墙
+    makeWall(120 + T * 2, T, 0, HALF);  // 北墙
+    makeWall(T, 120 + T * 2, -HALF, 0); // 西墙
+    makeWall(T, 120 + T * 2, HALF, 0);  // 东墙
+  }
+
+  // 场地中央：圆形平台 + 发光圆环 + 中央小柱，作为地图中心地标
+  function createCenterStage() {
+    const stage = new THREE.Mesh(
+      new THREE.CylinderGeometry(16, 18, 0.6, 48),
+      new THREE.MeshStandardMaterial({ color: 0x0d0d22, roughness: 0.6, metalness: 0.5 })
+    );
+    stage.position.y = 0.3;
+    scene.add(stage);
+    shootables.push(stage);
+    blockers.push(stage);
+    obstacles.push({ x: 0, z: 0, r: 18 }); // 中央平台也算障碍，玩家不能穿过去
+
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(17, 0.18, 8, 80),
+      new THREE.MeshStandardMaterial({ color: 0x111133, emissive: 0xff4dff, emissiveIntensity: 1.8 })
+    );
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = 0.75;
+    scene.add(ring);
+
+    const core = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.5, 0.8, 3, 10),
+      new THREE.MeshStandardMaterial({ color: 0x222244, emissive: 0x00e5ff, emissiveIntensity: 2.2 })
+    );
+    core.position.y = 2.1;
+    scene.add(core);
+  }
+
+  // 在地图四周均匀摆放霓虹柱子（几种颜色轮换）
+  function createPillars() {
+    const positions = [
+      [-40, -40], [40, -40], [-40, 40], [40, 40],
+      [-50, 0], [50, 0], [0, -50], [0, 50],
+      [-25, -52], [25, -52], [-25, 52], [25, 52]
+    ];
+    const colors = [0x00e5ff, 0xff4dff, 0xaa66ff, 0x00ffcc, 0xff66aa, 0x66ccff];
+    positions.forEach((pos, i) => {
+      const p = createPillar(pos[0], pos[1], colors[i % colors.length], 14 + (i % 3) * 2);
+      pillars.push(p); // 加入列表，主循环里做“呼吸灯”动画
+    });
+  }
+
+  // 创建一根霓虹柱子：圆柱主体 + 上下两个发光环 + 顶部光点
+  function createPillar(x, z, color, height) {
+    const group = new THREE.Group();
+
+    const body = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.7, 0.9, height, 10),
+      new THREE.MeshStandardMaterial({
+        color: 0x15152e, roughness: 0.5, metalness: 0.6,
+        emissive: color, emissiveIntensity: 0.35
+      })
+    );
+    body.position.y = height / 2;
+    group.add(body);
+    blockers.push(body);
+
+    // 上、下两个发光环
+    const ringMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: color, emissiveIntensity: 2.2 });
+    const ring1 = new THREE.Mesh(new THREE.TorusGeometry(1.0, 0.09, 8, 24), ringMat);
+    ring1.rotation.x = Math.PI / 2;
+    ring1.position.y = height - 1.2;
+    group.add(ring1);
+
+    const ring2 = ring1.clone(); // 克隆一个，位置放到底部
+    ring2.position.y = 1.2;
+    group.add(ring2);
+
+    // 顶部小光点
+    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.28, 10, 10), ringMat);
+    tip.position.y = height + 0.2;
+    group.add(tip);
+
+    group.position.set(x, 0, z);
+    group.userData.pulse = { ring1: ring1, ring2: ring2, phase: Math.random() * Math.PI * 2 };
+    scene.add(group);
+    shootables.push(group);
+    obstacles.push({ x: x, z: z, r: 1.2 }); // 柱子也算障碍，防止玩家穿模
+    return group;
+  }
+
+  // 在场地里放一些“掩体箱子”，供玩家绕柱子、练习射击
+  function createCrates() {
+    const crateData = [
+      [10, -22, 4], [-14, 8, 3], [20, 12, 5], [-22, -6, 3],
+      [6, 18, 3], [-8, -30, 4], [30, -12, 4], [-30, 20, 4]
+    ];
+    crateData.forEach((c) => makeCrate(c[0], c[1], c[2]));
+  }
+
+  // 创建一个掩体箱子：深色箱体 + 发光边框 + 顶部灯条
+  function makeCrate(x, z, size) {
+    const group = new THREE.Group();
+    const h = size * 0.62;
+
+    const body = new THREE.Mesh(
+      new THREE.BoxGeometry(size, h, size),
+      new THREE.MeshStandardMaterial({ color: 0x101026, roughness: 0.7, metalness: 0.5 })
+    );
+    body.position.y = h / 2;
+    group.add(body);
+    blockers.push(body);
+
+    // 用 EdgesGeometry 画出箱子的发光边框线
+    const edges = new THREE.LineSegments(
+      new THREE.EdgesGeometry(body.geometry),
+      new THREE.LineBasicMaterial({ color: 0x00e5ff, transparent: true, opacity: 0.8 })
+    );
+    edges.position.copy(body.position);
+    group.add(edges);
+
+    // 顶部灯条
+    const strip = new THREE.Mesh(
+      new THREE.BoxGeometry(size * 0.9, 0.1, size * 0.9),
+      new THREE.MeshStandardMaterial({ color: 0x222244, emissive: 0xff4dff, emissiveIntensity: 1.4 })
+    );
+    strip.position.y = h + 0.05;
+    group.add(strip);
+
+    group.position.set(x, 0, z);
+    scene.add(group);
+    shootables.push(group);
+    obstacles.push({ x: x, z: z, r: size * 0.55 }); // 圆形碰撞半径
+    return group;
+  }
+
+  // 放置 5 个“训练靶”：机器人还没出场，先用它们验证射击有没有打中
+  function createTargets() {
+    const targetData = [
+      [-24, -32, 0x00e5ff], [30, -28, 0xff4dff],
+      [-30, 26, 0xffaa00], [34, 30, 0x66ff88], [2, 44, 0xaa66ff]
+    ];
+    targetData.forEach((t) => makeTarget(t[0], t[1], t[2]));
+  }
+
+  // 创建一个训练靶：立柱 + 发光面板 + 白色边框，被打中会整体闪白
+  function makeTarget(x, z, color) {
+    const group = new THREE.Group();
+
+    const pole = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.12, 0.16, 2.2, 8),
+      new THREE.MeshStandardMaterial({ color: 0x222244, emissive: color, emissiveIntensity: 0.8 })
+    );
+    pole.position.y = 1.1;
+    group.add(pole);
+
+    const board = new THREE.Mesh(
+      new THREE.BoxGeometry(1.4, 1.4, 0.12),
+      new THREE.MeshStandardMaterial({ color: 0x222244, emissive: color, emissiveIntensity: 0.6 })
+    );
+    board.position.y = 2.2;
+    group.add(board);
+
+    // 白色边框
+    const frame = new THREE.LineSegments(
+      new THREE.EdgesGeometry(board.geometry),
+      new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9 })
+    );
+    frame.position.copy(board.position);
+    group.add(frame);
+
+    group.position.set(x, 0, z);
+    group.lookAt(0, 0, 0); // 让靶子面板面向场地中心
+
+    // 记录“被打中后要恢复”的数据
+    group.userData.isTarget = true;
+    group.userData.flashTimer = 0;
+    group.userData.baseEmissive = new THREE.Color(color);
+
+    scene.add(group);
+    targets.push(group);
+    shootables.push(group);
+    return group;
+  }
+  // ---------- 4. 第一人称控制：指针锁定 / 鼠标视角 / 键盘移动 ----------
+
+  // 配置“点击开始”按钮与鼠标指针锁定
+  function setupPointerLock() {
+    const overlay = document.getElementById('overlay');
+    const startBtn = document.getElementById('startBtn');
+    const sub = overlay.querySelector('.sub');
+    const tips = overlay.querySelector('.tips');
+    const subText = sub.textContent;
+    const tipsHtml = tips.innerHTML;
+
+    // 点击开始 → 锁定鼠标（浏览器要求：必须由用户点击触发）
+    startBtn.addEventListener('click', () => {
+      initAudio(); // 音频必须在用户点击之后才能创建（浏览器规则）
+      renderer.domElement.requestPointerLock(); // 锁定成功后（pointerlockchange 事件）再隐藏遮罩
+    });
+
+    // 指针锁定状态变化时调用
+    document.addEventListener('pointerlockchange', () => {
+      locked = document.pointerLockElement === renderer.domElement;
+      document.getElementById('crosshair').style.opacity = locked ? 1 : 0;
+      if (locked) {
+        // 恢复初始提示文案
+        sub.textContent = subText;
+        tips.innerHTML = tipsHtml;
+        startBtn.textContent = '点击开始';
+        overlay.classList.add('hidden');
+      } else {
+        // 按了 Esc → 显示暂停遮罩，点击可继续
+        sub.textContent = 'PAUSED · 已暂停';
+        tips.innerHTML = '按 <b>Esc</b> 已释放鼠标，点击下方按钮继续战斗';
+        startBtn.textContent = '继续战斗';
+        overlay.classList.remove('hidden');
+        resetInputState(); // 暂停时清空按键/速度，防止恢复后乱跑
+      }
+    });
+
+    // 鼠标移动 → 转动视角（只在锁定时生效）
+    document.addEventListener('mousemove', (e) => {
+      if (!locked) return;
+      const SENS = sniperZoomed ? 0.0013 : 0.0023; // 灵敏度（开镜时降低，方便精确瞄准）
+      player.yaw   -= e.movementX * SENS;
+      player.pitch -= e.movementY * SENS;
+      // 限制抬头 / 低头角度，防止视角翻转
+      const LIMIT = Math.PI / 2 - 0.02;
+      player.pitch = Math.max(-LIMIT, Math.min(LIMIT, player.pitch));
+      applyCameraRotation();
+    });
+
+    // 左键射击（按住左键时，连发武器会持续开火）
+    document.addEventListener('mousedown', (e) => {
+      if (!locked || e.button !== 0) return;
+      mouseHeld = true;
+      fire();
+    });
+    // 松开左键停止连发
+    document.addEventListener('mouseup', (e) => {
+      if (e.button !== 0) return;
+      mouseHeld = false;
+    });
+
+    // 屏蔽右键菜单
+    document.addEventListener('contextmenu', (e) => e.preventDefault());
+  }
+
+  // 监听键盘：W/A/S/D/Shift 记录按住状态；空格起跳、Ctrl 滑铲（用 e.code，不受输入法影响）
+  function setupKeyboard() {
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'KeyW') keys.forward = true;
+      if (e.code === 'KeyS') keys.back = true;
+      if (e.code === 'KeyA') keys.left = true;
+      if (e.code === 'KeyD') keys.right = true;
+      if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') keys.shift = true;
+      // 空格起跳（e.repeat 防止按住空格连续跳）
+      if (e.code === 'Space' && !e.repeat) tryJump();
+      // Ctrl 滑铲（e.repeat 防止按住 Ctrl 连续滑铲）
+      if ((e.code === 'ControlLeft' || e.code === 'ControlRight') && !e.repeat) startSlide();
+      // 1/2/3 切换武器，R 换弹
+      if (e.code === 'Digit1') switchWeapon('rifle');
+      if (e.code === 'Digit2') switchWeapon('shotgun');
+      if (e.code === 'Digit3') switchWeapon('sniper');
+      if (e.code === 'KeyR' && !e.repeat) {
+        if (playerDead) restartGame(); // 结算界面按 R 重开
+        else startReload();            // 平时 R 换弹
+      }
+      // G 键：狙击枪开 / 关瞄准镜
+      if (e.code === 'KeyG' && !e.repeat) toggleSniperZoom();
+      // 防止空格 / 方向键滚动页面
+      if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
+    });
+    window.addEventListener('keyup', (e) => {
+      if (e.code === 'KeyW') keys.forward = false;
+      if (e.code === 'KeyS') keys.back = false;
+      if (e.code === 'KeyA') keys.left = false;
+      if (e.code === 'KeyD') keys.right = false;
+      if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') keys.shift = false;
+    });
+  }
+
+  // 根据按键 + 时间差更新玩家位置（移动 / 跳跃重力 / 简单碰撞）
+  function updateMovement(dt) {
+    // 计算“前方 / 右方”方向（只取水平方向）
+    const forward = new THREE.Vector3(-Math.sin(player.yaw), 0, -Math.cos(player.yaw));
+    const right = new THREE.Vector3(Math.cos(player.yaw), 0, -Math.sin(player.yaw));
+
+    // 根据按键合成移动方向
+    const move = new THREE.Vector3();
+    const moving = keys.forward || keys.back || keys.left || keys.right;
+    if (keys.forward) move.add(forward);
+    if (keys.back) move.sub(forward);
+    if (keys.right) move.add(right);
+    if (keys.left) move.sub(right);
+
+    // 当前速度：滑铲最快 → 冲刺次之 → 走路最慢
+    let speed = WALK_SPEED;
+    if (sliding) {
+      // 滑铲期间速度从快慢慢衰减，直到滑铲结束
+      const t = slideTime / SLIDE_DURATION;
+      speed = SLIDE_SPEED * (0.5 + 0.5 * t);
+    } else if (sprinting && moving && player.onGround) {
+      speed = SPRINT_SPEED;
+    }
+
+    if (move.lengthSq() > 0) {
+      move.normalize(); // 归一化：斜着走时速度不变快
+      player.pos.addScaledVector(move, speed * dt);
+    }
+
+    // ---- 竖直方向：跳跃 + 重力 ----
+    if (!player.onGround) {
+      player.velY -= GRAVITY * dt; // 空中持续受重力下拉
+    }
+    player.pos.y += player.velY * dt;
+
+    // 落地检测：回到地面
+    if (player.pos.y <= 0) {
+      player.pos.y = 0;
+      player.velY = 0;
+      player.onGround = true;
+    } else {
+      player.onGround = false;
+    }
+
+    // 简单碰撞 1：不能走出围墙（围墙内壁大约在 ±59，留一点余量）
+    const BOUND = 57;
+    player.pos.x = Math.max(-BOUND, Math.min(BOUND, player.pos.x));
+    player.pos.z = Math.max(-BOUND, Math.min(BOUND, player.pos.z));
+
+    // 简单碰撞 2：不能穿进掩体 / 柱子 / 中央平台（用圆形碰撞近似）
+    const col = resolveCollision(player.pos.x, player.pos.z, 0.5);
+    player.pos.x = col[0];
+    player.pos.z = col[1];
+
+    // 更新相机位置（视线高度 = 地面高度 + 当前眼睛高度，第一人称）
+    camera.position.copy(player.pos);
+    camera.position.y = player.pos.y + eyeHeight;
+    // 同步玩家受击判定球的位置（敌人子弹判断打没打中你）
+    if (playerHitbox) playerHitbox.position.set(player.pos.x, player.pos.y + 1.0, player.pos.z);
+  }
+
+  // ---------- 5. 射击系统：射线 / 弹道 / 火花 / 枪口闪光 ----------
+
+  // 开火总入口：检查冷却 / 阵亡 / 换弹 / 弹匣后，按武器配置打出子弹
+  function fire() {
+    if (fireCooldown > 0) return;   // 射速冷却
+    if (playerDead) return;         // 阵亡不能开枪
+    if (reloading) return;          // 换弹中不能开枪
+    const w = WEAPONS[weaponId];
+    if (magAmmo <= 0) { startReload(); return; } // 没子弹自动换弹
+
+    fireCooldown = w.fireCooldown;  // 这把武器的射速
+    magAmmo--;                      // 消耗一颗子弹
+    recoil = 1;                     // 后坐动画
+    playWeaponSound(w.sound);       // 对应枪声
+
+    // 霰弹枪一次打多颗弹丸，其它武器打一颗
+    for (let i = 0; i < w.pellets; i++) shootPellet(w);
+
+    spawnMuzzleFlash(getMuzzleWorldPos()); // 枪口闪光
+
+    // 打空弹匣自动换弹
+    if (magAmmo <= 0) startReload();
+  }
+
+  // 发射一颗“子弹”（射线）：带随机散布，命中敌人扣血并加经验
+  function shootPellet(w) {
+    // 在准星周围加随机偏移，模拟武器散布（霰弹枪很大，狙击枪为零）
+    const ox = (Math.random() - 0.5) * 2 * w.spread;
+    const oy = (Math.random() - 0.5) * 2 * w.spread;
+    raycaster.setFromCamera(new THREE.Vector2(ox, oy), camera);
+
+    // 与所有可射击物体求交（recursive=true 表示也检查子物体）
+    const hits = raycaster.intersectObjects(shootables, true);
+
+    // 计算弹道终点
+    let hitPoint;
+    if (hits.length > 0) {
+      hitPoint = hits[0].point.clone();
+      // 顺着父节点往上找“训练靶 / 敌人”：打中会闪白 + 命中标记
+      let obj = hits[0].object;
+      while (obj && !obj.userData.isTarget && !obj.userData.isEnemy) obj = obj.parent;
+      if (obj) {
+        if (obj.userData.isTarget) {
+          flashTarget(obj);
+        } else if (obj.userData.isEnemy) {
+          damageEnemy(obj.userData.enemyRef, getWeaponDamage(w));
+        }
+        showHitMarker();
+      }
+    } else {
+      // 没打中任何东西：终点取射线前方 150 米处（方便看弹道）
+      hitPoint = raycaster.ray.origin.clone().addScaledVector(raycaster.ray.direction, 150);
+    }
+
+    // 视觉反馈：弹道光（颜色随武器变）+ 命中火花
+    const muzzle = getMuzzleWorldPos();
+    spawnTracer(muzzle, hitPoint, w.tracerColor, w.tracerLife);
+    spawnSparks(hitPoint);
+  }
+
+  // 取枪口在世界空间中的位置（用来画弹道和枪口火光）
+  function getMuzzleWorldPos() {
+    const v = new THREE.Vector3();
+    gunTip.getWorldPosition(v);
+    return v;
+  }
+
+  // 生成一条“弹道光”：从起点到终点，很快消失（颜色、存活时间可调）
+  function spawnTracer(from, to, color, life) {
+    const col = color || 0x88ffff;
+    const maxLife = life || 0.07;
+    const geo = new THREE.BufferGeometry().setFromPoints([from, to]);
+    const mat = new THREE.LineBasicMaterial({
+      color: col,
+      transparent: true,
+      opacity: 0.9,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      fog: false
+    });
+    const line = new THREE.Line(geo, mat);
+    scene.add(line);
+    tracers.push({ line: line, life: maxLife, maxLife: maxLife });
+  }
+
+  // 在指定位置生成一小撮火花粒子（带重力，向上喷然后落下）
+  // opts 可选参数：count 数量 / color 颜色 / speed 速度 / life 存活时间 / gravity 重力 / size 粒子大小
+  function spawnSparks(pos, opts) {
+    const o = Object.assign(
+      { count: 7, color: 0x88ffff, speed: 6, life: 0.3, gravity: 12, size: 0.09 },
+      opts || {}
+    );
+    const positions = new Float32Array(o.count * 3);
+    const velocities = [];
+    for (let i = 0; i < o.count; i++) {
+      positions[i * 3]     = pos.x;
+      positions[i * 3 + 1] = pos.y;
+      positions[i * 3 + 2] = pos.z;
+      velocities.push(new THREE.Vector3(
+        (Math.random() - 0.5) * o.speed,       // 随机水平速度
+        Math.random() * o.speed * 0.7 + o.speed * 0.3, // 向上速度
+        (Math.random() - 0.5) * o.speed
+      ));
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    const mat = new THREE.PointsMaterial({
+      color: o.color,
+      size: o.size,
+      transparent: true,
+      opacity: 1,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      fog: false
+    });
+    const points = new THREE.Points(geo, mat);
+    scene.add(points);
+
+    // 防止一次生成太多粒子拖慢性能：超过 20 组就丢掉最老的
+    if (sparkSystems.length > 20) {
+      const old = sparkSystems.shift();
+      scene.remove(old.points);
+      old.points.geometry.dispose();
+      old.points.material.dispose();
+    }
+    sparkSystems.push({ points: points, velocities: velocities, life: o.life, maxLife: o.life, gravity: o.gravity });
+  }
+
+  // 枪口闪光：一个快速出现又消失的亮球 + 点光源
+  function spawnMuzzleFlash(pos) {
+    muzzleFlash.position.copy(pos);
+    muzzleFlash.scale.setScalar(0.8 + Math.random() * 0.5); // 每次大小随机，更自然
+    muzzleFlash.visible = true;
+    muzzleFlashLife = 0.05;
+
+    muzzleLight.position.copy(pos);
+    muzzleLight.intensity = 30;
+  }
+
+  // 让训练靶闪白一下，模拟“被打中”
+  function flashTarget(targetGroup) {
+    targetGroup.userData.flashTimer = 0.12; // 闪 0.12 秒
+    setTargetMaterial(targetGroup, true);
+  }
+
+  // 设置训练靶所有材质的“闪白 / 还原”状态
+  function setTargetMaterial(group, white) {
+    group.traverse((child) => {
+      if (child.isMesh && child.material) { // 只处理 Mesh，边框线没有 emissive
+        if (white) {
+          child.material.emissive.set(0xffffff);
+          child.material.emissiveIntensity = 2.6;
+        } else {
+          child.material.emissive.copy(group.userData.baseEmissive);
+          child.material.emissiveIntensity = 0.6;
+        }
+      }
+    });
+  }
+
+  // 显示屏幕中央的红色命中标记（✕），每次都能重新播放动画
+  function showHitMarker() {
+    const el = document.getElementById('hitMarker');
+    el.classList.remove('show');
+    void el.offsetWidth; // 强制浏览器重排，保证连续命中也能重新播动画
+    el.classList.add('show');
+  }
+
+  // ---------- 6. 音效（WebAudio 现场合成，不用外部音频文件） ----------
+
+  // 初始化音频上下文（必须在用户点击后调用，浏览器规定）
+  function initAudio() {
+    if (audioCtx) return;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    audioCtx = new AC();
+    // 预先做一段 1 秒的白噪声，后面随时“切”一段来用
+    const len = audioCtx.sampleRate;
+    noiseBuffer = audioCtx.createBuffer(1, len, audioCtx.sampleRate);
+    const data = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+  }
+
+  // 根据武器类型播放对应的枪声
+  function playWeaponSound(type) {
+    if (type === 'rifle') playRifleSound();
+    else if (type === 'shotgun') playShotgunSound();
+    else if (type === 'sniper') playSniperSound();
+  }
+
+  // 步枪声：快速下滑的激光声（清脆高频）
+  function playRifleSound() {
+    if (!audioCtx) return;
+    const t0 = audioCtx.currentTime;
+
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(950, t0);
+    osc.frequency.exponentialRampToValueAtTime(240, t0 + 0.09);
+    gain.gain.setValueAtTime(0.18, t0);
+    gain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.1);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t0);
+    osc.stop(t0 + 0.12);
+
+    if (noiseBuffer) {
+      const src = audioCtx.createBufferSource();
+      src.buffer = noiseBuffer;
+      const filter = audioCtx.createBiquadFilter();
+      filter.type = 'highpass';
+      filter.frequency.value = 1500;
+      const nGain = audioCtx.createGain();
+      nGain.gain.setValueAtTime(0.08, t0);
+      nGain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.05);
+      src.connect(filter).connect(nGain).connect(audioCtx.destination);
+      src.start(t0, Math.random());
+      src.stop(t0 + 0.06);
+    }
+  }
+
+  // 霰弹枪声：低沉的轰声（噪声 + 低频正弦“咚”）
+  function playShotgunSound() {
+    if (!audioCtx) return;
+    const t0 = audioCtx.currentTime;
+
+    if (noiseBuffer) {
+      const src = audioCtx.createBufferSource();
+      src.buffer = noiseBuffer;
+      const filter = audioCtx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(1200, t0);
+      filter.frequency.exponentialRampToValueAtTime(200, t0 + 0.3);
+      const g = audioCtx.createGain();
+      g.gain.setValueAtTime(0.5, t0);
+      g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.35);
+      src.connect(filter).connect(g).connect(audioCtx.destination);
+      src.start(t0, Math.random());
+      src.stop(t0 + 0.4);
+    }
+
+    const osc = audioCtx.createOscillator();
+    const og = audioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(160, t0);
+    osc.frequency.exponentialRampToValueAtTime(45, t0 + 0.25);
+    og.gain.setValueAtTime(0.6, t0);
+    og.gain.exponentialRampToValueAtTime(0.001, t0 + 0.3);
+    osc.connect(og).connect(audioCtx.destination);
+    osc.start(t0);
+    osc.stop(t0 + 0.32);
+  }
+
+  // 狙击枪声：干脆的“啪”（短噪声 + 高频叮）
+  function playSniperSound() {
+    if (!audioCtx) return;
+    const t0 = audioCtx.currentTime;
+
+    if (noiseBuffer) {
+      const src = audioCtx.createBufferSource();
+      src.buffer = noiseBuffer;
+      const filter = audioCtx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.value = 2500;
+      filter.Q.value = 2;
+      const g = audioCtx.createGain();
+      g.gain.setValueAtTime(0.4, t0);
+      g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.12);
+      src.connect(filter).connect(g).connect(audioCtx.destination);
+      src.start(t0, Math.random());
+      src.stop(t0 + 0.15);
+    }
+
+    const osc = audioCtx.createOscillator();
+    const og = audioCtx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(1800, t0);
+    osc.frequency.exponentialRampToValueAtTime(600, t0 + 0.15);
+    og.gain.setValueAtTime(0.25, t0);
+    og.gain.exponentialRampToValueAtTime(0.001, t0 + 0.18);
+    osc.connect(og).connect(audioCtx.destination);
+    osc.start(t0);
+    osc.stop(t0 + 0.2);
+  }
+
+  // 换弹音效：两下机械“咔咔”声
+  function playReloadSound() {
+    if (!audioCtx) return;
+    const t0 = audioCtx.currentTime;
+    [0, 0.18].forEach((off) => {
+      const osc = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(220, t0 + off);
+      osc.frequency.exponentialRampToValueAtTime(140, t0 + off + 0.06);
+      g.gain.setValueAtTime(0.0001, t0 + off);
+      g.gain.exponentialRampToValueAtTime(0.12, t0 + off + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.001, t0 + off + 0.1);
+      osc.connect(g).connect(audioCtx.destination);
+      osc.start(t0 + off);
+      osc.stop(t0 + off + 0.12);
+    });
+  }
+  // ---------- 6.5 身体系统：生命 / 体力 / 冲刺 / 滑铲 / 跳跃 ----------
+
+  // 尝试起跳：必须站在地面上、并且不在滑铲中
+  function tryJump() {
+    if (!locked) return;           // 暂停时不响应
+    if (!player.onGround) return;  // 在空中不能二段跳
+    if (sliding) return;           // 滑铲中不跳（保持简单）
+    player.velY = JUMP_VELOCITY;   // 给一个向上的初速度
+    player.onGround = false;
+  }
+
+  // 尝试滑铲：必须站在地面、有足够体力、且当前没在滑
+  function startSlide() {
+    if (!locked) return;
+    if (!player.onGround) return;     // 空中不能滑铲
+    if (sliding) return;              // 已经在滑了
+    if (stamina < SLIDE_COST) return; // 体力不够
+    sliding = true;
+    slideTime = SLIDE_DURATION;
+    stamina -= SLIDE_COST;            // 一次滑铲消耗固定体力
+    staminaRegenDelay = STAMINA_REGEN_DELAY;
+  }
+
+  // 每帧处理“身体系统”：冲刺 / 滑铲 / 体力恢复 / 眼睛高度过渡 / FOV
+  function updateBody(dt) {
+    const moving = keys.forward || keys.back || keys.left || keys.right;
+
+    // ---- 冲刺：按住 Shift 且正在移动、在地面、有体力、没在滑铲 ----
+    sprinting = keys.shift && moving && player.onGround && !sliding && stamina > 0;
+    if (sprinting) {
+      stamina = Math.max(0, stamina - SPRINT_DRAIN * dt); // 冲刺持续消耗体力
+      staminaRegenDelay = STAMINA_REGEN_DELAY;            // 重新计时恢复
+    }
+
+    // ---- 滑铲计时 ----
+    if (sliding) {
+      slideTime -= dt;
+      if (slideTime <= 0) sliding = false; // 滑铲结束
+    }
+
+    // ---- 体力自动恢复（停止消耗一小段时间后开始回） ----
+    if (staminaRegenDelay > 0) {
+      staminaRegenDelay -= dt;
+    } else {
+      stamina = Math.min(MAX_STAMINA, stamina + STAMINA_REGEN * dt);
+    }
+
+    // ---- 眼睛高度：站立 1.7 米，滑铲 0.8 米，平滑过渡 ----
+    const targetEye = sliding ? EYE_SLIDE : EYE_NORMAL;
+    eyeHeight += (targetEye - eyeHeight) * Math.min(1, dt * 12);
+
+    // ---- 视野：开狙击镜 35 / 冲刺 82 / 平时 75 ----
+    const targetFov = sniperZoomed ? 35 : (sprinting ? 82 : 75);
+    if (Math.abs(camera.fov - targetFov) > 0.01) {
+      camera.fov += (targetFov - camera.fov) * Math.min(1, dt * 8);
+      camera.updateProjectionMatrix();
+    }
+
+    // 狙击镜遮罩：开镜显示，关镜隐藏
+    const scopeEl = document.getElementById('scopeOverlay');
+    if (sniperZoomed) scopeEl.classList.add('show');
+    else scopeEl.classList.remove('show');
+  }
+
+  // 扣血（P3 敌人打玩家时调用；本阶段先把接口备好）
+  function takeDamage(amount) {
+    health = Math.max(0, Math.min(MAX_HEALTH, health - amount));
+  }
+
+  // 回血（升级 / 道具时调用）
+  function heal(amount) {
+    health = Math.max(0, Math.min(MAX_HEALTH, health + amount));
+  }
+
+  // 暂停 / 切后台时重置输入状态，防止恢复后角色乱跑或“空中瞬移”
+  function resetInputState() {
+    keys.forward = keys.back = keys.left = keys.right = false;
+    keys.shift = false;
+    player.velY = 0;
+    sliding = false;
+    sprinting = false;
+    eyeHeight = EYE_NORMAL;
+    mouseHeld = false; // 防止恢复后自动开枪
+    sniperZoomed = false; // 退出狙击镜
+  }
+
+  // 每帧刷新 HUD：血条 / 体力条 / 等级 + 经验条
+  function updateHUD() {
+    const hpEl = document.getElementById('healthFill');
+    const hpText = document.getElementById('healthText');
+    hpEl.style.width = (health / MAX_HEALTH) * 100 + '%';
+    hpText.textContent = Math.round(health) + '/' + MAX_HEALTH;
+
+    const stEl = document.getElementById('staminaFill');
+    const stText = document.getElementById('staminaText');
+    stEl.style.width = (stamina / MAX_STAMINA) * 100 + '%';
+    stText.textContent = Math.round(stamina) + '/' + MAX_STAMINA;
+    // 体力快用光时变暗提示
+    stEl.style.opacity = stamina < 5 ? 0.4 : 1;
+
+    // 等级 + 经验条
+    const lvEl = document.getElementById('levelText');
+    const xpFill = document.getElementById('xpFill');
+    const xpText = document.getElementById('xpText');
+    lvEl.textContent = 'Lv.' + level;
+    const need = xpNeeded();
+    xpFill.style.width = Math.min(100, xp / need * 100) + '%';
+    xpText.textContent = Math.floor(xp) + '/' + need;
+
+    // 武器信息：名字 / 弹匣余量 / 换弹提示
+    const wInfo = WEAPONS[weaponId];
+    const wName = document.getElementById('weaponName');
+    const wAmmo = document.getElementById('weaponAmmo');
+    const rHint = document.getElementById('reloadHint');
+    wName.textContent = wInfo.name;
+    wAmmo.textContent = magAmmo + '/' + wInfo.magSize;
+    if (magAmmo <= Math.ceil(wInfo.magSize * 0.25)) wAmmo.classList.add('low');
+    else wAmmo.classList.remove('low');
+    if (reloading) rHint.classList.remove('hidden');
+    else rHint.classList.add('hidden');
+
+    // 击杀统计 + 连杀
+    document.getElementById('killCount').textContent = '击杀 ' + totalKills;
+    document.getElementById('streakCount').textContent = '连杀 ' + killstreak;
+    // 准星：开狙击镜时隐藏（换成狙击镜遮罩）
+    document.getElementById('crosshair').style.opacity = locked && !playerDead && !sniperZoomed ? 1 : 0;
+  }
+
+  // ---------- 6.6 敌人系统（P3）：机器人 / 三状态 AI / 血条 / 爆炸重生 ----------
+
+  // 圆形碰撞：把坐标从障碍物里“推”出来（玩家和敌人都用）
+  function resolveCollision(x, z, radius) {
+    for (const o of obstacles) {
+      const dx = x - o.x;
+      const dz = z - o.z;
+      const dist = Math.sqrt(dx * dx + dz * dz);
+      const minDist = o.r + radius;
+      if (dist < minDist && dist > 0.0001) {
+        const push = (minDist - dist) / dist;
+        x += dx * push;
+        z += dz * push;
+      }
+    }
+    return [x, z];
+  }
+
+  // 创建玩家受击判定球：看不见，只用来被敌人子弹“打中”
+  function createPlayerHitbox() {
+    playerHitbox = new THREE.Mesh(
+      new THREE.SphereGeometry(0.7, 8, 8),
+      new THREE.MeshBasicMaterial()
+    );
+    playerHitbox.visible = false; // 不渲染
+    scene.add(playerHitbox);
+  }
+
+  // 生成一组随机巡逻点（避免太靠墙和中央平台）
+  function makePatrolPoints(count) {
+    const pts = [];
+    for (let i = 0; i < count; i++) {
+      const x = (Math.random() - 0.5) * 96; // -48 ~ 48
+      const z = (Math.random() - 0.5) * 96;
+      // 太靠近中央平台的点丢掉重来
+      if (Math.sqrt(x * x + z * z) < 22) { i--; continue; }
+      pts.push({ x: x, z: z });
+    }
+    return pts;
+  }
+
+  // 创建一个机器人（发光眼 + 几何体身体），返回 { group, gunTip, eyeMat }
+  function createEnemyModel(color) {
+    const group = new THREE.Group();
+    const metal = new THREE.MeshStandardMaterial({ color: 0x2a2a3a, roughness: 0.5, metalness: 0.7 });
+    const accent = new THREE.MeshStandardMaterial({ color: 0x111133, emissive: color, emissiveIntensity: 1.1 });
+    const eyeMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xff3300, emissiveIntensity: 2.0 });
+
+    // 双腿
+    const legGeo = new THREE.BoxGeometry(0.35, 0.9, 0.4);
+    const legL = new THREE.Mesh(legGeo, metal); legL.position.set(-0.3, 0.45, 0); group.add(legL);
+    const legR = new THREE.Mesh(legGeo, metal); legR.position.set(0.3, 0.45, 0); group.add(legR);
+
+    // 躯干
+    const torso = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.0, 0.7), metal);
+    torso.position.y = 1.45;
+    group.add(torso);
+
+    // 胸口发光核心
+    const core = new THREE.Mesh(new THREE.SphereGeometry(0.18, 10, 10), accent);
+    core.position.set(0, 1.5, 0.37);
+    group.add(core);
+
+    // 肩甲 + 手臂
+    const padGeo = new THREE.BoxGeometry(0.4, 0.3, 0.5);
+    const padL = new THREE.Mesh(padGeo, accent); padL.position.set(-0.55, 1.85, 0); group.add(padL);
+    const padR = new THREE.Mesh(padGeo, accent); padR.position.set(0.55, 1.85, 0); group.add(padR);
+    const armGeo = new THREE.BoxGeometry(0.22, 0.7, 0.25);
+    const armL = new THREE.Mesh(armGeo, metal); armL.position.set(-0.66, 1.05, 0); group.add(armL);
+    const armR = new THREE.Mesh(armGeo, metal); armR.position.set(0.66, 1.05, 0); group.add(armR);
+
+    // 头部 + 发光眼
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.5, 0.55), metal);
+    head.position.y = 2.15;
+    group.add(head);
+    const eyeGeo = new THREE.BoxGeometry(0.13, 0.09, 0.05);
+    const eyeL = new THREE.Mesh(eyeGeo, eyeMat); eyeL.position.set(-0.13, 2.2, 0.29); group.add(eyeL);
+    const eyeR = new THREE.Mesh(eyeGeo, eyeMat); eyeR.position.set(0.13, 2.2, 0.29); group.add(eyeR);
+
+    // 右手炮管（朝 +Z 前方）
+    const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.6, 8), metal);
+    barrel.rotation.x = Math.PI / 2;
+    barrel.position.set(0.66, 1.05, 0.45);
+    group.add(barrel);
+
+    // 枪口位置标记点（取子弹出发点用）
+    const gunTip = new THREE.Object3D();
+    gunTip.position.set(0.66, 1.05, 0.78);
+    group.add(gunTip);
+
+    return { group: group, gunTip: gunTip, eyeMat: eyeMat };
+  }
+
+  // 创建敌人头顶的 3D 血条（深色底 + 彩色填充，始终面向相机）
+  function makeEnemyBar(height) {
+    const bg = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.3, 0.16),
+      new THREE.MeshBasicMaterial({ color: 0x111122, transparent: true, opacity: 0.8, depthWrite: false })
+    );
+    const fillGeo = new THREE.PlaneGeometry(1.2, 0.1);
+    fillGeo.translate(0.6, 0, 0); // 把填充条左端对齐到 x=0，缩放时从左边缩短
+    const fill = new THREE.Mesh(fillGeo, new THREE.MeshBasicMaterial({ color: 0x44ff88, transparent: true, opacity: 0.95, depthWrite: false }));
+    fill.position.x = -0.6;
+    const g = new THREE.Group();
+    g.add(bg);
+    g.add(fill);
+    g.position.y = height;
+    return { group: g, fill: fill };
+  }
+
+  // 生成 5 个敌人，分散在地图各处
+  function createEnemies() {
+    const colors = [0x00e5ff, 0xff4dff, 0xffaa00, 0x66ff88, 0xff5533];
+    ENEMY_SPAWNS.forEach((sp, i) => {
+      const e = makeEnemy(sp[0], sp[1], colors[i % colors.length]);
+      enemies.push(e);
+    });
+  }
+
+  // 创建单个敌人：模型 + 血条 + AI 初始数据
+  function makeEnemy(spawnX, spawnZ, color) {
+    const model = createEnemyModel(color);
+    const group = model.group;
+    group.position.set(spawnX, 0, spawnZ);
+    scene.add(group);
+    shootables.push(group); // 玩家能打中它
+
+    const bar = makeEnemyBar(2.7);
+    bar.group.position.set(spawnX, 2.75, spawnZ);
+    scene.add(bar.group);
+
+    const enemy = {
+      group: group,
+      gunTip: model.gunTip,
+      eyeMat: model.eyeMat,
+      bar: bar,
+      spawnX: spawnX, spawnZ: spawnZ,
+      hp: ENEMY_MAX_HP, maxHp: ENEMY_MAX_HP,
+      alive: true,
+      respawnTimer: 0,
+      state: 'patrol',         // patrol 巡逻 / chase 追击 / return 回巡逻
+      waypoints: makePatrolPoints(6),
+      wpIndex: 0,
+      faceYaw: Math.random() * Math.PI * 2,
+      fireCooldown: Math.random() * 1.5, // 错开每个敌人的开火时间
+      loseTimer: 0,
+      flashTimer: 0,
+      moved: false,
+      bobPhase: Math.random() * Math.PI * 2
+    };
+    // 记住每个网格原本的发光参数，闪白结束后能恢复
+    group.traverse((c) => {
+      if (c.isMesh) {
+        c.userData.baseEmissive = c.material.emissive.clone();
+        c.userData.baseIntensity = c.material.emissiveIntensity;
+      }
+    });
+    group.userData.isEnemy = true;
+    group.userData.enemyRef = enemy;
+    return enemy;
+  }
+
+  // 每帧更新所有敌人（AI 状态机 / 血条 / 闪白 / 重生）
+  function updateEnemies(dt) {
+    for (const e of enemies) {
+      if (!e.alive) {
+        // 死亡：倒计时后重生
+        e.respawnTimer -= dt;
+        if (e.respawnTimer <= 0) respawnEnemy(e);
+        continue;
+      }
+      // 开火冷却倒数（没有它敌人永远不会开枪）
+      if (e.fireCooldown > 0) e.fireCooldown -= dt;
+
+      // 被打中的闪白计时
+      if (e.flashTimer > 0) {
+        e.flashTimer -= dt;
+        if (e.flashTimer <= 0) setEnemyFlash(e, false);
+      }
+      updateEnemyState(e, dt);
+      updateEnemyBar(e);
+      // 眼睛发光：追击时又红又亮（呼吸效果），平时暗一些
+      e.eyeMat.emissiveIntensity = e.state === 'chase'
+        ? 2.4 + Math.sin(time * 10) * 0.8
+        : 1.2 + Math.sin(time * 3 + e.bobPhase) * 0.3;
+      // 头顶血条跟着敌人走，并始终面向相机（广告牌效果）
+      e.bar.group.position.set(e.group.position.x, 2.75, e.group.position.z);
+      e.bar.group.quaternion.copy(camera.quaternion);
+    }
+  }
+
+  // 敌人 AI 状态机：巡逻 → 追击 → 脱战回巡逻
+  function updateEnemyState(e, dt) {
+    const px = player.pos.x;
+    const pz = player.pos.z;
+    const dx = px - e.group.position.x;
+    const dz = pz - e.group.position.z;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+    const canSee = playerCanBeSeen(e, dist);
+
+    e.moved = false;
+
+    if (e.state === 'patrol') {
+      // 巡逻：走向当前路点
+      moveToWaypoint(e, dt);
+      // 发现玩家 → 追击
+      if (canSee) { e.state = 'chase'; e.loseTimer = 0; }
+    } else if (e.state === 'chase') {
+      if (!canSee) {
+        // 丢失目标，累计时间，超时后回去巡逻
+        e.loseTimer += dt;
+        if (e.loseTimer > LOSE_TIME) { e.state = 'return'; e.loseTimer = 0; }
+      } else {
+        e.loseTimer = 0;
+        if (dist > STOP_DIST) {
+          // 追向玩家，但保持一点距离
+          moveToward(e, px, pz, CHASE_SPEED, dt);
+        } else {
+          turnToward(e, px, pz, 8, dt);
+        }
+        // 在射程内就开枪
+        if (dist <= FIRE_RANGE) tryEnemyFire(e);
+      }
+    } else if (e.state === 'return') {
+      // 脱战：先回最近的巡逻点，回到就恢复巡逻
+      if (canSee) { e.state = 'chase'; e.loseTimer = 0; }
+      else {
+        const wp = nearestWaypoint(e);
+        moveToward(e, wp.x, wp.z, PATROL_SPEED, dt);
+        if (distToPoint(e, wp) < 1.5) e.state = 'patrol';
+      }
+    }
+
+    // 走路时的上下起伏（模拟迈步）
+    if (e.moved) {
+      e.group.position.y = Math.abs(Math.sin(time * 9 + e.bobPhase)) * 0.06;
+    } else {
+      e.group.position.y = 0;
+    }
+  }
+
+  // 巡逻：朝当前路点走，走到就换下一个
+  function moveToWaypoint(e, dt) {
+    const wp = e.waypoints[e.wpIndex];
+    moveToward(e, wp.x, wp.z, PATROL_SPEED, dt);
+    if (distToPoint(e, wp) < 1.2) {
+      e.wpIndex = (e.wpIndex + 1) % e.waypoints.length;
+    }
+  }
+
+  // 朝目标点移动（带转身和碰撞）
+  function moveToward(e, tx, tz, speed, dt) {
+    const dx = tx - e.group.position.x;
+    const dz = tz - e.group.position.z;
+    const d = Math.sqrt(dx * dx + dz * dz);
+    if (d < 0.01) return;
+    const step = Math.min(speed * dt, d); // 别走过头
+    e.group.position.x += (dx / d) * step;
+    e.group.position.z += (dz / d) * step;
+    // 圆形碰撞：别穿进障碍物
+    const col = resolveCollision(e.group.position.x, e.group.position.z, 0.8);
+    e.group.position.x = col[0];
+    e.group.position.z = col[1];
+    // 别走出围墙
+    e.group.position.x = Math.max(-57, Math.min(57, e.group.position.x));
+    e.group.position.z = Math.max(-57, Math.min(57, e.group.position.z));
+    // 面朝移动方向
+    turnToward(e, tx, tz, 6, dt);
+    e.moved = true;
+  }
+
+  // 平滑转身（用最短角度插值，避免原地转圈）
+  function turnToward(e, tx, tz, turnSpeed, dt) {
+    const dx = tx - e.group.position.x;
+    const dz = tz - e.group.position.z;
+    if (dx * dx + dz * dz < 0.0001) return;
+    const targetYaw = Math.atan2(dx, dz);
+    let diff = targetYaw - e.faceYaw;
+    while (diff > Math.PI) diff -= Math.PI * 2;
+    while (diff < -Math.PI) diff += Math.PI * 2;
+    e.faceYaw += diff * Math.min(1, turnSpeed * dt);
+    e.group.rotation.y = e.faceYaw;
+  }
+
+  // 判断敌人能不能“看到”玩家：距离 + 视线是否被障碍物挡住
+  function playerCanBeSeen(e, dist) {
+    if (playerDead) return false;
+    if (dist > DETECT_RADIUS) return false;
+    const from = enemyEyeWorld(e);
+    const to = new THREE.Vector3(player.pos.x, player.pos.y + 1.2, player.pos.z);
+    const dir = new THREE.Vector3().subVectors(to, from);
+    const d = dir.length();
+    if (d < 0.01) return true;
+    dir.normalize();
+    enemyRay.set(from, dir);
+    enemyRay.far = d - 0.5;
+    const hits = enemyRay.intersectObjects(blockers, false);
+    return hits.length === 0;
+  }
+
+  // 敌人尝试开火：命中率决定子弹偏不偏
+  function tryEnemyFire(e) {
+    if (e.fireCooldown > 0) return;
+    e.fireCooldown = ENEMY_FIRE_COOLDOWN;
+
+    const from = enemyEyeWorld(e);
+    const aim = new THREE.Vector3(player.pos.x, player.pos.y + 1.2, player.pos.z);
+
+    // 根据命中率决定瞄准方向：命中就瞄玩家，否则瞄玩家附近随机点（打偏）
+    const hit = Math.random() < ENEMY_ACCURACY;
+    let dir;
+    if (hit) {
+      dir = new THREE.Vector3().subVectors(aim, from).normalize();
+    } else {
+      const miss = aim.clone().add(new THREE.Vector3(
+        (Math.random() - 0.5) * 3,
+        (Math.random() - 0.5) * 2.2,
+        (Math.random() - 0.5) * 3
+      ));
+      dir = new THREE.Vector3().subVectors(miss, from).normalize();
+    }
+
+    // 射线判断子弹先打中谁（玩家判定球 / 障碍物）
+    enemyRay.set(from, dir);
+    enemyRay.far = 80;
+    const hits = enemyRay.intersectObjects([playerHitbox].concat(blockers), false);
+
+    let end;
+    if (hits.length > 0) {
+      end = hits[0].point.clone();
+      if (hits[0].object === playerHitbox) {
+        // 打中玩家
+        takeDamage(ENEMY_DAMAGE);
+        showDamageFlash();
+        spawnSparks(end, { color: 0xff3355, count: 8, speed: 5, life: 0.3, gravity: 10, size: 0.1 });
+      } else {
+        // 打中障碍物：冒火花
+        spawnSparks(end, { color: 0xff9944, count: 5, speed: 3, life: 0.25, gravity: 12, size: 0.08 });
+      }
+    } else {
+      end = from.clone().addScaledVector(dir, 60);
+    }
+
+    // 敌人子弹的弹道光（红色系，跟玩家的区分开）
+    spawnTracer(from, end, 0xff6644, 0.09);
+    playEnemyShotSound();
+  }
+
+  // 取敌人枪口的世界坐标（子弹出发位置）
+  function enemyEyeWorld(e) {
+    const v = new THREE.Vector3();
+    e.gunTip.getWorldPosition(v);
+    return v;
+  }
+
+  // 找离敌人最近的一个巡逻点（脱战回撤时用）
+  function nearestWaypoint(e) {
+    let best = e.waypoints[0];
+    let bestD = Infinity;
+    for (const wp of e.waypoints) {
+      const d = distToPoint(e, wp);
+      if (d < bestD) { bestD = d; best = wp; }
+    }
+    return best;
+  }
+
+  // 敌人到某个点的距离
+  function distToPoint(e, pt) {
+    const dx = e.group.position.x - pt.x;
+    const dz = e.group.position.z - pt.z;
+    return Math.sqrt(dx * dx + dz * dz);
+  }
+
+  // 刷新敌人头顶血条（长度 + 颜色：绿 → 红）
+  function updateEnemyBar(e) {
+    const ratio = Math.max(0, e.hp / e.maxHp);
+    e.bar.fill.scale.x = ratio;
+    e.bar.fill.material.color.copy(BAR_COLOR_HP).lerp(BAR_COLOR_LOW, 1 - ratio);
+  }
+
+  // 敌人被打中：扣血 + 闪白 + 立刻进入追击
+  function damageEnemy(e, amount) {
+    if (!e.alive) return;
+    addXp(HIT_XP); // 命中敌人 +5 经验
+    e.hp = Math.max(0, e.hp - amount);
+    e.flashTimer = 0.12;
+    setEnemyFlash(e, true);
+    if (e.state !== 'chase') { e.state = 'chase'; e.loseTimer = 0; }
+    if (e.hp <= 0) killEnemy(e);
+  }
+
+  // 敌人死亡：隐藏 + 爆炸粒子 + 延迟重生计时
+  function killEnemy(e) {
+    addXp(KILL_XP); // 击杀敌人 +20 经验
+    totalKills++;    // 本局总击杀 +1
+    killstreak++;    // 当前连杀 +1
+    // 连杀播报：3 双杀 / 5 三杀 / 10 大杀特杀
+    if (killstreak === 3 || killstreak === 5 || killstreak === 10) {
+      announceKillstreak(killstreak);
+    }
+    e.alive = false;
+    e.hp = 0;
+    e.respawnTimer = ENEMY_RESPAWN_TIME;
+    e.group.visible = false;
+    e.bar.group.visible = false;
+    const pos = e.group.position.clone();
+    pos.y = 1.2;
+    spawnExplosion(pos);
+    playExplosionSound(); // 敌人死亡爆炸音
+  }
+
+  // 延迟重生：恢复满血，回到出生点，重新巡逻
+  function respawnEnemy(e) {
+    e.alive = true;
+    e.hp = ENEMY_MAX_HP;
+    e.state = 'patrol';
+    e.loseTimer = 0;
+    e.flashTimer = 0;
+    e.group.visible = true;
+    e.bar.group.visible = true;
+    e.group.position.set(e.spawnX, 0, e.spawnZ);
+    setEnemyFlash(e, false);
+    updateEnemyBar(e);
+    // 出场时的爆炸闪光
+    const pos = e.group.position.clone();
+    pos.y = 1.2;
+    spawnExplosion(pos);
+    playExplosionSound(); // 出场爆炸音
+  }
+
+  // 设置敌人所有材质“闪白 / 还原”
+  function setEnemyFlash(e, white) {
+    e.group.traverse((c) => {
+      if (c.isMesh) {
+        if (white) {
+          c.material.emissive.set(0xffffff);
+          c.material.emissiveIntensity = 2.5;
+        } else {
+          c.material.emissive.copy(c.userData.baseEmissive);
+          c.material.emissiveIntensity = c.userData.baseIntensity;
+        }
+      }
+    });
+  }
+
+  // 生成爆炸效果：多团彩色粒子 + 一个快速扩大的闪光球
+  function spawnExplosion(pos) {
+    spawnSparks(pos, { count: 30, color: 0xffaa33, speed: 9, life: 0.9, gravity: 6, size: 0.16 });
+    spawnSparks(pos, { count: 20, color: 0xff5522, speed: 6, life: 0.7, gravity: 5, size: 0.12 });
+    spawnSparks(pos, { count: 12, color: 0xffff66, speed: 4, life: 0.5, gravity: 4, size: 0.1 });
+    const flash = new THREE.Mesh(
+      new THREE.SphereGeometry(0.4, 10, 10),
+      new THREE.MeshBasicMaterial({ color: 0xffaa44, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false, fog: false })
+    );
+    flash.position.copy(pos);
+    scene.add(flash);
+    explosionFlashes.push({ mesh: flash, life: 0.35, maxLife: 0.35 });
+  }
+
+  // ---------- 6.7 玩家受击 / 死亡 / 重生（P3 占位，P7 会换成正式结算） ----------
+
+  // 屏幕边缘红闪：提示玩家被打中
+  function showDamageFlash() {
+    const el = document.getElementById('damageFlash');
+    el.classList.remove('show');
+    void el.offsetWidth;
+    el.classList.add('show');
+  }
+
+
+  // 玩家血量归零：进入阵亡状态，倒计时后自动重生
+  function handlePlayerDeath() {
+    if (playerDead) return;
+    playerDead = true;
+    resetInputState();
+    playPlayerDeathSound(); // 玩家死亡低沉音
+    killstreak = 0;         // 死亡打断连杀
+    sniperZoomed = false;   // 退出狙击镜
+    showResultOverlay();    // 显示结算界面（击杀 / 存活时间 / 等级）
+    // 敌人脱战回巡逻
+    for (const e of enemies) if (e.alive) e.state = 'return';
+  }
+
+
+  // 每帧：累计存活时间；血量归零进入结算
+  function updatePlayerLife(dt) {
+    if (playerDead) return; // 已经死亡：停在结算界面，等按 R 重开
+    runTime += dt;          // 累计存活时间
+    if (health <= 0) {
+      handlePlayerDeath();
+    }
+  }
+
+  // 播放敌人激光声：比玩家的枪声更低更短，方便区分
+  function playEnemyShotSound() {
+    if (!audioCtx) return;
+    const t0 = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(520, t0);
+    osc.frequency.exponentialRampToValueAtTime(160, t0 + 0.08);
+    gain.gain.setValueAtTime(0.12, t0);
+    gain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.09);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t0);
+    osc.stop(t0 + 0.1);
+  }
+
+  // ---------- 6.8 成长系统（P4）：经验 / 等级 / 升级奖励 ----------
+
+  // 计算当前等级升到下一级需要的经验
+  function xpNeeded() {
+    return LEVEL_XP_BASE + (level - 1) * LEVEL_XP_GROWTH;
+  }
+
+  // 某把武器当前的实际伤害 = 武器基础伤害 ×（1 + 每级 +10%）
+  function getWeaponDamage(w) {
+    return w.damage * (1 + 0.1 * (level - 1));
+  }
+
+  // 增加经验；经验攒够就升级（回满血，伤害自动 +10%）
+  function addXp(amount) {
+    xp += amount;
+    while (xp >= xpNeeded()) {
+      xp -= xpNeeded();      // 扣掉升这一级消耗的经验
+      level++;               // 升级
+      health = MAX_HEALTH;   // 升级回满血
+      showLevelUp();         // 屏幕提示
+      playLevelUpSound();    // 升级音效
+    }
+  }
+
+  // 屏幕中央显示“等级提升”
+  function showLevelUp() {
+    const el = document.getElementById('levelUpMsg');
+    el.textContent = '等级提升 · Lv.' + level;
+    el.classList.remove('show');
+    void el.offsetWidth;
+    el.classList.add('show');
+  }
+
+  // 播放升级音效：三个快速上升的音符
+  function playLevelUpSound() {
+    if (!audioCtx) return;
+    const t0 = audioCtx.currentTime;
+    [523, 659, 784].forEach((f, i) => {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.value = f;
+      const t = t0 + i * 0.09;
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(0.15, t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(t);
+      osc.stop(t + 0.14);
+    });
+  }
+
+  // ---------- 6.9 武器系统（P5）：切换武器 / 换弹 ----------
+
+  // 切换武器（按 1/2/3）：存好旧枪子弹，取出新枪子弹，并重建枪模型
+  function switchWeapon(id) {
+    if (playerDead) return;           // 死亡时不能切枪
+    if (id === weaponId) return;      // 已经在用这把枪
+    weaponAmmo[weaponId] = magAmmo;   // 保存当前武器的剩余子弹
+    weaponId = id;
+    magAmmo = weaponAmmo[id];         // 取出新武器的剩余子弹
+    reloading = false;                // 切换会打断换弹
+    reloadTimer = 0;
+    if (id !== 'sniper') sniperZoomed = false; // 换别的枪时退出狙击镜
+    rebuildGun();                     // 换枪模型
+    fireCooldown = 0.25;              // 切枪小硬直，防止切枪瞬间开枪
+  }
+
+  // 开始换弹：弹匣打空自动调用，或按 R 手动
+  function startReload() {
+    const w = WEAPONS[weaponId];
+    if (reloading) return;                 // 已经在换
+    if (magAmmo >= w.magSize) return;      // 弹匣是满的不用换
+    reloading = true;
+    reloadTimer = w.reloadTime;
+    playReloadSound();
+  }
+
+  // 每帧更新换弹倒计时，倒计时结束把弹匣装满
+  function updateReload(dt) {
+    if (!reloading) return;
+    reloadTimer -= dt;
+    if (reloadTimer <= 0) {
+      reloading = false;
+      magAmmo = WEAPONS[weaponId].magSize;
+      weaponAmmo[weaponId] = magAmmo;
+    }
+  }
+
+  // ---------- 6.10 音效播报（P6）：爆炸音 / 玩家死亡音 / 连杀播报 / 狙击镜 ----------
+
+  // 切换狙击镜（只有拿狙击枪时有效，按 G）
+  function toggleSniperZoom() {
+    if (playerDead) return;        // 死亡时不能开镜
+    if (weaponId !== 'sniper') return;
+    sniperZoomed = !sniperZoomed;
+  }
+
+  // 全屏播报连杀（3 双杀 / 5 三杀 / 10 大杀特杀）
+  function announceKillstreak(kills) {
+    const title = kills === 3 ? '双杀！' : (kills === 5 ? '三杀！' : '大杀特杀！');
+    const el = document.getElementById('killstreakMsg');
+    el.textContent = title;
+    el.classList.remove('show');
+    void el.offsetWidth;
+    el.classList.add('show');
+    playKillstreakSound(kills);
+  }
+
+  // 敌人死亡爆炸音：低频噪声轰声 + 下沉的正弦“咚”
+  function playExplosionSound() {
+    if (!audioCtx) return;
+    const t0 = audioCtx.currentTime;
+
+    if (noiseBuffer) {
+      const src = audioCtx.createBufferSource();
+      src.buffer = noiseBuffer;
+      const filter = audioCtx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(900, t0);
+      filter.frequency.exponentialRampToValueAtTime(100, t0 + 0.6);
+      const g = audioCtx.createGain();
+      g.gain.setValueAtTime(0.6, t0);
+      g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.7);
+      src.connect(filter).connect(g).connect(audioCtx.destination);
+      src.start(t0, Math.random());
+      src.stop(t0 + 0.8);
+    }
+
+    const osc = audioCtx.createOscillator();
+    const og = audioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(120, t0);
+    osc.frequency.exponentialRampToValueAtTime(35, t0 + 0.5);
+    og.gain.setValueAtTime(0.7, t0);
+    og.gain.exponentialRampToValueAtTime(0.001, t0 + 0.55);
+    osc.connect(og).connect(audioCtx.destination);
+    osc.start(t0);
+    osc.stop(t0 + 0.6);
+  }
+
+  // 玩家死亡低沉音：下滑的长音 + 噪声
+  function playPlayerDeathSound() {
+    if (!audioCtx) return;
+    const t0 = audioCtx.currentTime;
+
+    const osc = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(220, t0);
+    osc.frequency.exponentialRampToValueAtTime(55, t0 + 1.2);
+    g.gain.setValueAtTime(0.4, t0);
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + 1.4);
+    osc.connect(g).connect(audioCtx.destination);
+    osc.start(t0);
+    osc.stop(t0 + 1.5);
+
+    if (noiseBuffer) {
+      const src = audioCtx.createBufferSource();
+      src.buffer = noiseBuffer;
+      const filter = audioCtx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(800, t0);
+      filter.frequency.exponentialRampToValueAtTime(80, t0 + 1);
+      const ng = audioCtx.createGain();
+      ng.gain.setValueAtTime(0.4, t0);
+      ng.gain.exponentialRampToValueAtTime(0.001, t0 + 1.1);
+      src.connect(filter).connect(ng).connect(audioCtx.destination);
+      src.start(t0, Math.random());
+      src.stop(t0 + 1.2);
+    }
+  }
+
+  // 连杀特殊音效：几个音符（3 杀两个音 / 5 杀三个音 / 10 杀五个音）
+  function playKillstreakSound(kills) {
+    if (!audioCtx) return;
+    const t0 = audioCtx.currentTime;
+    let notes;
+    if (kills === 3) notes = [660, 880];            // 双杀
+    else if (kills === 5) notes = [523, 659, 784];  // 三杀
+    else notes = [392, 523, 659, 784, 1046];        // 大杀特杀
+    notes.forEach((f, i) => {
+      const osc = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      osc.type = 'square';
+      osc.frequency.value = f;
+      const t = t0 + i * 0.12;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.16, t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+      osc.connect(g).connect(audioCtx.destination);
+      osc.start(t);
+      osc.stop(t + 0.32);
+    });
+  }
+
+  // ---------- 6.11 结算系统（P7）：显示击杀 / 存活时间 / 等级，按 R 重开 ----------
+
+  // 把秒数格式化成 分:秒（例如 83 秒 → 01:23）
+  function formatTime(sec) {
+    const s = Math.floor(sec);
+    const mm = String(Math.floor(s / 60)).padStart(2, '0');
+    const ss = String(s % 60).padStart(2, '0');
+    return mm + ':' + ss;
+  }
+
+  // 显示结算界面：填入本局击杀数 / 存活时间 / 最终等级
+  function showResultOverlay() {
+    document.getElementById('resultKills').textContent = totalKills;
+    document.getElementById('resultTime').textContent = formatTime(runTime);
+    document.getElementById('resultLevel').textContent = 'Lv.' + level;
+    document.getElementById('resultOverlay').classList.remove('hidden');
+  }
+
+  // 按 R 重开：重置整局游戏（等级/经验/击杀/武器/敌人/时间全部归零）
+  function restartGame() {
+    // 玩家状态
+    playerDead = false;
+    health = MAX_HEALTH;
+    stamina = MAX_STAMINA;
+    staminaRegenDelay = 0;
+    level = 1;
+    xp = 0;
+    killstreak = 0;
+    totalKills = 0;
+    runTime = 0;
+    // 武器状态
+    weaponId = 'rifle';
+    for (const k in weaponAmmo) weaponAmmo[k] = WEAPONS[k].magSize;
+    magAmmo = WEAPONS.rifle.magSize;
+    reloading = false;
+    reloadTimer = 0;
+    sniperZoomed = false;
+    fireCooldown = 0;
+    recoil = 0;
+    // 位置
+    player.pos.set(0, 0, 22);
+    player.velY = 0;
+    player.yaw = Math.PI;
+    player.pitch = 0;
+    player.onGround = true;
+    eyeHeight = EYE_NORMAL;
+    applyCameraRotation();
+    // 枪模型切回步枪（无条件重建，保证是步枪造型）
+    rebuildGun();
+    // 敌人：全部复活回出生点
+    for (const e of enemies) respawnEnemy(e);
+    // 清掉残留特效（弹道 / 火花 / 爆炸闪光）
+    for (const t of tracers) { scene.remove(t.line); t.line.geometry.dispose(); t.line.material.dispose(); }
+    tracers.length = 0;
+    for (const s of sparkSystems) { scene.remove(s.points); s.points.geometry.dispose(); s.points.material.dispose(); }
+    sparkSystems.length = 0;
+    for (const ef of explosionFlashes) { scene.remove(ef.mesh); ef.mesh.geometry.dispose(); ef.mesh.material.dispose(); }
+    explosionFlashes.length = 0;
+    // 隐藏结算界面
+    document.getElementById('resultOverlay').classList.add('hidden');
+    updateHUD();
+  }
+
+  // ---------- 7. 每帧更新：特效生命周期 + 动画 ----------
+
+  // 更新所有“一次性特效”的生命周期（弹道 / 火花 / 闪光 / 后坐 / 靶子 / 柱子）
+  function updateEffects(dt) {
+    // 弹道光淡出并删除
+    for (let i = tracers.length - 1; i >= 0; i--) {
+      const t = tracers[i];
+      t.life -= dt;
+      t.line.material.opacity = Math.max(0, t.life / t.maxLife);
+      if (t.life <= 0) {
+        scene.remove(t.line);
+        t.line.geometry.dispose();
+        t.line.material.dispose();
+        tracers.splice(i, 1);
+      }
+    }
+
+    // 火花粒子：受重力下落，透明度降低后删除
+    for (let i = sparkSystems.length - 1; i >= 0; i--) {
+      const s = sparkSystems[i];
+      s.life -= dt;
+      const posAttr = s.points.geometry.attributes.position;
+      for (let j = 0; j < s.velocities.length; j++) {
+        const v = s.velocities[j];
+        v.y -= s.gravity * dt; // 重力（每组粒子有自己的重力值）
+        posAttr.array[j * 3]     += v.x * dt;
+        posAttr.array[j * 3 + 1] += v.y * dt;
+        posAttr.array[j * 3 + 2] += v.z * dt;
+      }
+      posAttr.needsUpdate = true;
+      s.points.material.opacity = Math.max(0, s.life / s.maxLife);
+      if (s.life <= 0) {
+        scene.remove(s.points);
+        s.points.geometry.dispose();
+        s.points.material.dispose();
+        sparkSystems.splice(i, 1);
+      }
+    }
+
+    // 爆炸闪光球：快速变大并淡出
+    for (let i = explosionFlashes.length - 1; i >= 0; i--) {
+      const ef = explosionFlashes[i];
+      ef.life -= dt;
+      const t = 1 - Math.max(0, ef.life / ef.maxLife);
+      ef.mesh.scale.setScalar(1 + t * 6);
+      ef.mesh.material.opacity = Math.max(0, ef.life / ef.maxLife) * 0.9;
+      if (ef.life <= 0) {
+        scene.remove(ef.mesh);
+        ef.mesh.geometry.dispose();
+        ef.mesh.material.dispose();
+        explosionFlashes.splice(i, 1);
+      }
+    }
+
+    // 枪口闪光衰减
+    if (muzzleFlashLife > 0) {
+      muzzleFlashLife -= dt;
+      muzzleFlash.visible = muzzleFlashLife > 0;
+      muzzleLight.intensity = muzzleFlashLife > 0 ? 30 * (muzzleFlashLife / 0.05) : 0;
+    }
+
+    // 枪口后坐恢复
+    recoil = Math.max(0, recoil - dt * 8);
+
+    // 训练靶闪白计时
+    for (const t of targets) {
+      if (t.userData.flashTimer > 0) {
+        t.userData.flashTimer -= dt;
+        if (t.userData.flashTimer <= 0) setTargetMaterial(t, false);
+      }
+    }
+
+    // 柱子呼吸灯动画
+    updatePillarPulse(dt);
+  }
+
+  // 让霓虹柱子的光环缓慢“呼吸”（用 sin 函数改变亮度和大小）
+  function updatePillarPulse(dt) {
+    time += dt;
+    for (const p of pillars) {
+      const phase = p.userData.pulse.phase;
+      const k = (Math.sin(time * 2 + phase) + 1) / 2; // 在 0~1 之间波动
+      const ringMat = p.userData.pulse.ring1.material;
+      ringMat.emissiveIntensity = 1.4 + k * 2;
+      p.userData.pulse.ring1.scale.setScalar(1 + k * 0.12);
+      p.userData.pulse.ring2.scale.setScalar(1 + k * 0.12);
+    }
+  }
+
+  // ---------- 8. 主循环 ----------
+
+  // 每一帧：更新身体 → 移动 → 敌人 → 特效 → HUD → 画画面
+  function animate() {
+    requestAnimationFrame(animate);
+
+    const dt = Math.min(clock.getDelta(), 0.05); // 限制最大时间差，防止切后台后“瞬移”
+
+    updatePlayerLife(dt);        // 玩家死亡 / 重生
+    if (!playerDead) {
+      updateBody(dt);            // 冲刺 / 滑铲 / 体力 / 眼睛高度 / FOV
+      updateMovement(dt);        // 玩家移动 + 跳跃重力 + 碰撞
+    }
+    updateEnemies(dt);           // 敌人 AI / 血条 / 闪白 / 重生
+    updateEffects(dt);           // 弹道 / 火花 / 爆炸 / 闪光 / 后坐 / 靶子 / 柱子
+    updateHUD();                 // 血条 + 体力条
+    updateReload(dt);            // 换弹倒计时
+    fireCooldown = Math.max(0, fireCooldown - dt); // 射击冷却倒数
+    // 按住左键 + 连发武器 → 持续开火
+    if (mouseHeld && WEAPONS[weaponId].auto) fire();
+
+    // 枪的后坐力 + 走路晃动（后坐大小随武器不同）
+    if (gun) {
+      const wRec = WEAPONS[weaponId].recoil;
+      gun.position.z = -0.5 + recoil * 0.16 * wRec;
+      gun.rotation.x = recoil * 0.12 * wRec;
+      const moving = keys.forward || keys.back || keys.left || keys.right;
+      gun.position.y = -0.28 + (moving ? Math.sin(time * 9) * 0.012 : 0);
+    }
+
+    renderer.render(scene, camera); // 把这一帧画出来
+  }
+
+  // ---------- 9. 枪模型 + 特效对象 ----------
+
+  // 创建第一人称看到的“枪”模型（步枪/霰弹枪/狙击枪三种，用基础几何体拼）
+  function buildGunModel(id) {
+    const gunMat = new THREE.MeshStandardMaterial({ color: 0x1a1a33, roughness: 0.4, metalness: 0.7 });
+    const glowMat = new THREE.MeshStandardMaterial({ color: 0x222244, emissive: 0x00e5ff, emissiveIntensity: 1.6 });
+    const g = new THREE.Group();
+
+    // 小工具：在 (x,y,z) 放一个几何体零件，可选绕 X 轴旋转
+    function part(geo, mat, x, y, z, rx) {
+      const m = new THREE.Mesh(geo, mat);
+      m.position.set(x, y, z);
+      if (rx) m.rotation.x = rx;
+      g.add(m);
+      return m;
+    }
+
+    // 枪口默认位置（不同武器会改）
+    let tipY = -0.1;
+    let tipZ = -0.82;
+
+    if (id === 'rifle') {
+      // 步枪：中等长度枪管 + 弹匣 + 发光条
+      part(new THREE.BoxGeometry(0.09, 0.12, 0.5), gunMat, 0.12, -0.12, -0.25);
+      part(new THREE.CylinderGeometry(0.035, 0.035, 0.5, 8), gunMat, 0.12, -0.1, -0.55, Math.PI / 2);
+      part(new THREE.BoxGeometry(0.1, 0.03, 0.2), glowMat, 0.12, -0.06, -0.3);
+      const mag = part(new THREE.BoxGeometry(0.06, 0.22, 0.12), gunMat, 0.12, -0.22, -0.2);
+      mag.rotation.x = 0.25;
+    } else if (id === 'shotgun') {
+      // 霰弹枪：双管 + 泵动护木，短粗
+      part(new THREE.BoxGeometry(0.1, 0.13, 0.45), gunMat, 0.14, -0.13, -0.2);
+      part(new THREE.CylinderGeometry(0.045, 0.045, 0.5, 8), gunMat, 0.09, -0.1, -0.55, Math.PI / 2);
+      part(new THREE.CylinderGeometry(0.045, 0.045, 0.5, 8), gunMat, 0.19, -0.1, -0.55, Math.PI / 2);
+      part(new THREE.BoxGeometry(0.1, 0.14, 0.3), gunMat, 0.14, -0.19, -0.4);
+      part(new THREE.BoxGeometry(0.08, 0.04, 0.2), glowMat, 0.14, -0.07, -0.3);
+      tipY = -0.11;
+    } else if (id === 'sniper') {
+      // 狙击枪：细长枪管 + 瞄准镜
+      part(new THREE.BoxGeometry(0.08, 0.11, 0.6), gunMat, 0.1, -0.11, -0.3);
+      part(new THREE.CylinderGeometry(0.028, 0.028, 0.9, 8), gunMat, 0.1, -0.09, -0.85, Math.PI / 2);
+      part(new THREE.CylinderGeometry(0.05, 0.05, 0.3, 10), gunMat, 0.1, -0.03, -0.35);
+      part(new THREE.BoxGeometry(0.05, 0.03, 0.14), glowMat, 0.1, -0.05, -0.35);
+      tipY = -0.09;
+      tipZ = -1.4;
+    }
+
+    // 枪口位置标记点（不渲染，只用来取世界坐标）
+    const tip = new THREE.Object3D();
+    tip.position.set(0.12, tipY, tipZ);
+    g.add(tip);
+
+    g.position.set(0.32, -0.28, -0.5);
+    return { group: g, tip: tip };
+  }
+
+  // 创建初始枪（步枪）并挂到相机上
+  function createGun() {
+    const m = buildGunModel('rifle');
+    gun = m.group;
+    gunTip = m.tip;
+    camera.add(gun);
+    return gun;
+  }
+
+  // 切换武器时重建枪模型（先清掉旧枪，释放显存）
+  function rebuildGun() {
+    if (gun) {
+      camera.remove(gun);
+      gun.traverse((c) => {
+        if (c.isMesh) {
+          c.geometry.dispose();
+          c.material.dispose();
+        }
+      });
+    }
+    const m = buildGunModel(weaponId);
+    gun = m.group;
+    gunTip = m.tip;
+    camera.add(gun);
+  }
+
+  // 创建枪口闪光用的亮球和灯光（可复用，不反复新建）
+  function createMuzzleFx() {
+    muzzleFlash = new THREE.Mesh(
+      new THREE.SphereGeometry(0.09, 8, 8),
+      new THREE.MeshBasicMaterial({
+        color: 0x88ffff,
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        fog: false
+      })
+    );
+    muzzleFlash.visible = false;
+    scene.add(muzzleFlash);
+
+    muzzleLight = new THREE.PointLight(0x88ffff, 0, 9, 2);
+    scene.add(muzzleLight);
+  }
+
+  // ---------- 10. 入口 ----------
+
+  // 整个游戏的启动函数
+  function init() {
+    try {
+      initRenderer();   // 1. 渲染器
+      initScene();      // 2. 场景 + 灯光 + 雾
+      initCamera();     // 3. 相机
+      buildArena();     // 4. 搭竞技场
+      gun = createGun();// 5. 第一人称枪
+      createMuzzleFx(); // 6. 枪口特效对象
+      createPlayerHitbox(); // 6.5 玩家受击判定球（P3）
+      setupPointerLock();// 7. 指针锁定 + 鼠标视角 + 射击
+      setupKeyboard();  // 8. 键盘
+      clock = new THREE.Clock();
+      animate();        // 9. 开始主循环
+    } catch (err) {
+      showError('初始化失败：' + err.message);
+    }
+  }
+
+  // 把致命错误显示在屏幕上，方便排查
+  function showError(msg) {
+    const el = document.getElementById('errMsg');
+    el.style.display = 'block';
+    el.textContent = '出错了：\n' + msg + '\n\n请按 F12 打开控制台查看详细报错。';
+  }
+
+  // 窗口大小变化时，同步更新相机和渲染器的尺寸
+  window.addEventListener('resize', () => {
+    if (!camera || !renderer) return;
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  // 启动游戏！
+  init();
+  </script>
+</body>
+</html>

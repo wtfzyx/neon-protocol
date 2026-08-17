@@ -1,0 +1,39 @@
+{
+  "name": "neon-protocol",
+  "version": "1.0.0",
+  "description": "霓虹协议 · 3D 科技风机甲对战 FPS 网页游戏（Electron 桌面版）",
+  "main": "main.js",
+  "author": "wtfzyx",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win"
+  },
+  "build": {
+    "appId": "com.wtfzyx.neonprotocol",
+    "productName": "NeonProtocol",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "index.html",
+      "three.min.js",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "devDependencies": {
+    "electron": "^43.4.0",
+    "electron-builder": "^26.15.3"
+  }
+}
