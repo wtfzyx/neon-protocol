@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>霓虹协议 · Neon Protocol（P7 完整版）</title>
+<title>霓虹协议 · Neon Protocol（v1.1 完整版 · 含25/35专武）</title>
 <style>
   /* ===== 基础：去掉默认边距，防止页面滚动 ===== */
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -30,6 +30,37 @@
   #damageFlash { position: fixed; inset: 0; pointer-events: none; z-index: 8; background: radial-gradient(ellipse at center, rgba(255, 0, 40, 0) 40%, rgba(255, 0, 40, .55) 100%); opacity: 0; }
   #damageFlash.show { animation: dmgAnim .35s ease-out forwards; }
   @keyframes dmgAnim { 0% { opacity: 1; } 100% { opacity: 0; } }
+
+  /* ===== 强化选择弹窗（P4） ===== */
+  #choiceModal { position: fixed; inset: 0; z-index: 25; display: flex; align-items: center; justify-content: center; background: rgba(4, 2, 12, .78); }
+  #choiceModal.hidden { display: none; }
+  .modal-box { width: min(560px, 90vw); background: linear-gradient(180deg, rgba(20, 14, 40, .97), rgba(10, 8, 26, .97)); border: 1px solid rgba(0, 229, 255, .45); border-radius: 10px; box-shadow: 0 0 40px rgba(0, 229, 255, .25); padding: 26px 30px; text-align: center; }
+  .modal-box h3 { font-size: 24px; letter-spacing: 3px; color: #7dffd6; margin-bottom: 6px; }
+  .modal-sub { font-size: 13px; color: #9db8d8; margin-bottom: 18px; }
+  .modal-options { display: flex; flex-direction: column; gap: 10px; }
+  .modal-opt { display: flex; align-items: center; gap: 12px; text-align: left; background: rgba(255, 255, 255, .04); border: 1px solid rgba(140, 200, 255, .25); border-radius: 6px; padding: 10px 14px; }
+  .opt-key { width: 26px; height: 26px; flex: none; display: flex; align-items: center; justify-content: center; border: 1px solid #7dffd6; border-radius: 50%; color: #7dffd6; font-weight: bold; }
+  .opt-name { font-size: 16px; color: #eaf6ff; margin-bottom: 2px; }
+  .opt-desc { font-size: 13px; color: #9db8d8; }
+  .modal-hint { margin-top: 16px; font-size: 13px; color: #9db8d8; }
+  .modal-hint b { color: #7dffd6; font-weight: normal; }
+  /* 金色弹窗（25/35 级专武，扩展） */
+  .modal-box.gold { border: 1px solid rgba(255, 200, 80, .85); box-shadow: 0 0 50px rgba(255, 180, 50, .55); background: linear-gradient(180deg, rgba(40, 26, 8, .98), rgba(24, 14, 4, .98)); }
+  .modal-box.gold h3 { color: #ffd76a; text-shadow: 0 0 14px rgba(255, 180, 50, .9); }
+  .modal-box.gold .opt-name { color: #ffe9b8; }
+  .modal-box.gold .opt-key { border-color: #ffd76a; color: #ffd76a; }
+
+  /* ===== Boss 血条 + 横幅 + 黑屏过渡（P2） ===== */
+  #bossBar { position: fixed; left: 50%; top: 58px; transform: translateX(-50%); width: min(720px, 70vw); z-index: 12; text-align: center; pointer-events: none; }
+  #bossBar.hidden { display: none; }
+  #bossName { font-size: 20px; letter-spacing: 4px; color: #ffd76a; text-shadow: 0 0 12px rgba(255, 170, 50, .9); margin-bottom: 6px; }
+  .boss-bg { width: 100%; height: 18px; background: rgba(30, 10, 5, .9); border: 1px solid rgba(255, 170, 50, .5); border-radius: 3px; overflow: hidden; box-shadow: 0 0 16px rgba(255, 120, 20, .4); }
+  #bossFill { height: 100%; width: 100%; background: linear-gradient(90deg, #ff3b1a, #ffaa33); box-shadow: 0 0 12px rgba(255, 120, 20, .8); }
+  #bossMsg { position: fixed; left: 50%; top: 30%; transform: translateX(-50%); font-size: 44px; color: #ffd76a; letter-spacing: 8px; text-shadow: 0 0 24px rgba(255, 170, 50, 1), 0 0 60px rgba(255, 80, 20, .7); z-index: 21; pointer-events: none; opacity: 0; }
+  #bossMsg.show { animation: bossMsgAnim 2.2s ease-out forwards; }
+  @keyframes bossMsgAnim { 0% { opacity: 0; transform: translateX(-50%) scale(1.8); } 12% { opacity: 1; transform: translateX(-50%) scale(1); } 80% { opacity: 1; } 100% { opacity: 0; } }
+  #transitionOverlay { position: fixed; inset: 0; background: #000; opacity: 0; pointer-events: none; z-index: 30; transition: opacity .55s ease; }
+  #transitionOverlay.show { opacity: 1; }
 
   /* ===== 结算界面（P7） ===== */
   #resultOverlay { position: fixed; inset: 0; z-index: 22; display: flex; flex-direction: column; align-items: center; justify-content: center; background: radial-gradient(ellipse at center, rgba(30, 5, 20, .88) 0%, rgba(4, 2, 10, .96) 70%); text-align: center; }
@@ -116,7 +147,7 @@
   <canvas id="gameCanvas"></canvas>
 
   <!-- 常驻 HUD -->
-  <div id="hudTitle">霓虹协议 <small>P7 · 完整版</small></div>
+  <div id="hudTitle">霓虹协议 <small>v1.1 · 完整版</small></div>
 
   <!-- 等级 + 经验条（P4） -->
   <div id="levelBox">
@@ -200,6 +231,32 @@
     <button id="startBtn">点击开始</button>
   </div>
 
+  <!-- 强化选择弹窗（P4） -->
+  <div id="choiceModal" class="hidden">
+    <div class="modal-box" id="modalBox">
+      <h3 id="choiceTitle">等级强化</h3>
+      <div class="modal-sub" id="choiceSub">升级，选择一个强化</div>
+      <div class="modal-options">
+        <div class="modal-opt" id="optRow0"><span class="opt-key">1</span><div><div class="opt-name" id="optName0"></div><div class="opt-desc" id="optDesc0"></div></div></div>
+        <div class="modal-opt" id="optRow1"><span class="opt-key">2</span><div><div class="opt-name" id="optName1"></div><div class="opt-desc" id="optDesc1"></div></div></div>
+        <div class="modal-opt" id="optRow2"><span class="opt-key">3</span><div><div class="opt-name" id="optName2"></div><div class="opt-desc" id="optDesc2"></div></div></div>
+      </div>
+      <div class="modal-hint">按 <b>1 / 2 / 3</b> 选择</div>
+    </div>
+  </div>
+
+  <!-- Boss 血条（P2） -->
+  <div id="bossBar" class="hidden">
+    <div id="bossName">霓虹·大圣</div>
+    <div class="boss-bg"><div id="bossFill"></div></div>
+  </div>
+
+  <!-- Boss 金色横幅（P2） -->
+  <div id="bossMsg"></div>
+
+  <!-- 黑屏过渡（P2） -->
+  <div id="transitionOverlay"></div>
+
   <!-- 结算界面（P7） -->
   <div id="resultOverlay" class="hidden">
     <h2>机体损毁</h2>
@@ -219,7 +276,7 @@
   'use strict';
 
   // ============================================================
-  //  霓虹协议 · P5 武器系统
+  //  霓虹协议 · v1.1 迭代（P1~P6 + 25/35 级专属武器金色弹窗）
   //  功能：科技风竞技场（发光网格地面/霓虹柱子/雾效/大场地）
   //        第一人称视角 / WASD 移动 / 鼠标视角(Pointer Lock)
   //        左键射线射击 / 准星 / 弹道与火花特效 / 训练靶
@@ -250,6 +307,7 @@
   const keys = { forward: false, back: false, left: false, right: false, shift: false };
 
   let locked = false;                   // 鼠标是否被锁定（指针锁定状态）
+  let paused = true;                    // 全局暂停（P0）：true 时游戏世界完全冻结，只渲染画面
 
   // 射击相关
   const raycaster = new THREE.Raycaster();
@@ -260,6 +318,54 @@
   // （射击冷却已改为每把武器各自的配置，见 1.8 的 WEAPONS）
   let fireCooldown = 0;                 // 当前剩余冷却时间
   let recoil = 0;                       // 枪口后坐动画进度（0~1）
+
+  // ---------- 1.9 战斗数值（P1：伤害飘字 / 暴击） ----------
+  const damageNumbers = [];             // 伤害飘字列表（会自己消失）
+  const DMG_NUM_CAP = 30;               // 同时最多显示的飘字数量
+  const CRIT_CHANCE = 0.15;             // 暴击率（15%）
+
+  // ---------- 1.10 Boss 战（P2） ----------
+  let bossTriggered = false;            // 本局是否已触发过 Boss 战（全场只一次）
+  let bossFightActive = false;          // 是否正在 Boss 战中
+  let boss = null;                      // Boss 数据对象
+  let bossArenaBuilt = false;           // Boss 场景是否已建造
+  const bossSceneObjects = [];          // Boss 场景的可显隐物体
+  const bossProjectiles = [];           // Boss 棍气波弹道列表
+  const BOSS_ARENA_X = 600;             // Boss 场景中心 X（远离主地图，互不干扰）
+  const BOSS_ARENA_Z = 600;             // Boss 场景中心 Z
+  const BOSS_MAX_HP = 1200;             // Boss 血量
+  const MAIN_BG_COLOR = new THREE.Color(0x060614); // 主地图天空色（用于恢复）
+  const MAIN_FOG = new THREE.Fog(0x060614, 35, 110); // 主地图雾（用于恢复）
+  const BOSS_BG_COLOR = new THREE.Color(0x2b1305);   // Boss 黄昏天空色
+  const BOSS_FOG = new THREE.Fog(0x2a1405, 6, 42);   // Boss 浓雾
+  const BOSS_DMG_MELEE = 55;            // 挥棍伤害（原 22 × 2.5）
+  const BOSS_DMG_CHARGE = 50;           // 冲撞伤害（原 20 × 2.5）
+  const BOSS_DMG_WAVE = 40;             // 棍气波伤害（原 15 × 2.5+）
+  const BOSS_PATTERN_INTERVAL = 1.6;    // 三行为轮换间隔（原 3.0，频次提升）
+
+  // ---------- 1.11 Boss 奖励与回归增幅（P3） ----------
+  let maxHealth = 100;                   // 当前生命上限（初始=MAX_HEALTH，击败 Boss 后 120；init 里会同步）
+  let weaponDamageBonus = 0;             // 全武器伤害永久加成（击败 Boss +10%）
+  let enemyHpMult = 1;                   // 敌人血量倍率（回归后 ×2）
+  let enemyDmgMult = 1;                  // 敌人伤害倍率（回归后 ×1.5）
+  let enemySpeedMult = 1;                // 敌人移速倍率（回归后 ×1.3）
+  let enemyAccBonus = 0;                 // 敌人命中率加成（回归后 +0.2）
+
+  // ---------- 1.12 弹窗选择系统（P4：每 5 级强化三选一；P5/P6 也走这个队列） ----------
+  const modalQueue = [];                 // 待显示的弹窗队列（排队依次显示，不重叠）
+  let modalActive = false;               // 是否正在显示弹窗
+  let currentModal = null;               // 当前弹窗配置
+  let staminaRegenMult = 1;              // 体力回复速度倍率（强化 +0.25/次）
+
+  // ---------- 1.13 武器专精（P5：15 级三选一） ----------
+  // ---------- 1.14 路线选择（P6：20 级二选一） ----------
+  let killXpMult = 1;                    // 击杀经验倍率（地狱难度 ×2）
+
+  const weaponSpecs = {                   // 每把武器的专精参数（永久，重开清零）
+    rifle:   { dmgMult: 1, fireMult: 1, pelletsBonus: 0, reloadMult: 1 },
+    shotgun: { dmgMult: 1, fireMult: 1, pelletsBonus: 0, reloadMult: 1 },
+    sniper:  { dmgMult: 1, fireMult: 1, pelletsBonus: 0, reloadMult: 1, lifesteal: 0 }
+  };
 
   // 场景里的障碍物（圆形碰撞用）
   const obstacles = [];
@@ -348,17 +454,17 @@
   // ---------- 1.8 武器系统（P5：步枪 / 霰弹枪 / 狙击枪） ----------
   const WEAPONS = {
     rifle: {
-      name: '步枪', damage: 10, fireCooldown: 0.12, auto: true,
+      id: 'rifle', name: '步枪', damage: 10, fireCooldown: 0.12, auto: true,
       pellets: 1, spread: 0.006, magSize: 30, reloadTime: 1.2,
       recoil: 1, tracerColor: 0x88ffff, tracerLife: 0.07, sound: 'rifle'
     },
     shotgun: {
-      name: '霰弹枪', damage: 8, fireCooldown: 0.9, auto: false,
+      id: 'shotgun', name: '霰弹枪', damage: 8, fireCooldown: 0.9, auto: false,
       pellets: 5, spread: 0.045, magSize: 8, reloadTime: 1.8,
       recoil: 2.2, tracerColor: 0xffaa33, tracerLife: 0.06, sound: 'shotgun'
     },
     sniper: {
-      name: '狙击枪', damage: 50, fireCooldown: 1.4, auto: false,
+      id: 'sniper', name: '狙击枪', damage: 50, fireCooldown: 1.4, auto: false,
       pellets: 1, spread: 0.0, magSize: 5, reloadTime: 2.2,
       recoil: 3.0, tracerColor: 0xff6bff, tracerLife: 0.1, sound: 'sniper'
     }
@@ -736,12 +842,14 @@
         tips.innerHTML = tipsHtml;
         startBtn.textContent = '点击开始';
         overlay.classList.add('hidden');
+        if (!modalActive) paused = false; // 锁定成功 → 恢复游戏（弹窗期间保持冻结，P4）
       } else {
-        // 按了 Esc → 显示暂停遮罩，点击可继续
+        // 按了 Esc → 显示暂停遮罩，点击可继续；同时冻结游戏世界（P0）
         sub.textContent = 'PAUSED · 已暂停';
         tips.innerHTML = '按 <b>Esc</b> 已释放鼠标，点击下方按钮继续战斗';
         startBtn.textContent = '继续战斗';
         overlay.classList.remove('hidden');
+        paused = true; // 暂停：敌人 AI / 子弹 / 命中判定 / 计时器全部停止（P0）
         resetInputState(); // 暂停时清空按键/速度，防止恢复后乱跑
       }
     });
@@ -777,6 +885,14 @@
   // 监听键盘：W/A/S/D/Shift 记录按住状态；空格起跳、Ctrl 滑铲（用 e.code，不受输入法影响）
   function setupKeyboard() {
     window.addEventListener('keydown', (e) => {
+      // 弹窗选择：1/2/3 选择，弹窗期间忽略其它按键（P4）
+      if (modalActive) {
+        if (e.code === 'Digit1') { chooseOption(0); }
+        else if (e.code === 'Digit2') { chooseOption(1); }
+        else if (e.code === 'Digit3') { chooseOption(2); }
+        e.preventDefault();
+        return;
+      }
       if (e.code === 'KeyW') keys.forward = true;
       if (e.code === 'KeyS') keys.back = true;
       if (e.code === 'KeyA') keys.left = true;
@@ -791,7 +907,10 @@
       if (e.code === 'Digit2') switchWeapon('shotgun');
       if (e.code === 'Digit3') switchWeapon('sniper');
       if (e.code === 'KeyR' && !e.repeat) {
-        if (playerDead) restartGame(); // 结算界面按 R 重开
+        if (playerDead) {
+          if (bossFightActive) restartBossFight(); // Boss 战失败 → 重开本局 Boss 战（P2）
+          else restartGame();                       // 结算界面按 R 重开
+        }
         else startReload();            // 平时 R 换弹
       }
       // G 键：狙击枪开 / 关瞄准镜
@@ -852,10 +971,14 @@
       player.onGround = false;
     }
 
-    // 简单碰撞 1：不能走出围墙（围墙内壁大约在 ±59，留一点余量）
-    const BOUND = 57;
-    player.pos.x = Math.max(-BOUND, Math.min(BOUND, player.pos.x));
-    player.pos.z = Math.max(-BOUND, Math.min(BOUND, player.pos.z));
+    // 简单碰撞 1：不能走出当前场地边界（主地图 ±57；Boss 场景以 600,600 为中心 ±55）
+    let minX = -57, maxX = 57, minZ = -57, maxZ = 57;
+    if (bossFightActive) {
+      minX = BOSS_ARENA_X - 55; maxX = BOSS_ARENA_X + 55;
+      minZ = BOSS_ARENA_Z - 55; maxZ = BOSS_ARENA_Z + 55;
+    }
+    player.pos.x = Math.max(minX, Math.min(maxX, player.pos.x));
+    player.pos.z = Math.max(minZ, Math.min(maxZ, player.pos.z));
 
     // 简单碰撞 2：不能穿进掩体 / 柱子 / 中央平台（用圆形碰撞近似）
     const col = resolveCollision(player.pos.x, player.pos.z, 0.5);
@@ -873,19 +996,21 @@
 
   // 开火总入口：检查冷却 / 阵亡 / 换弹 / 弹匣后，按武器配置打出子弹
   function fire() {
+    if (paused) return;             // 暂停时不能开枪（P0）
     if (fireCooldown > 0) return;   // 射速冷却
     if (playerDead) return;         // 阵亡不能开枪
     if (reloading) return;          // 换弹中不能开枪
     const w = WEAPONS[weaponId];
     if (magAmmo <= 0) { startReload(); return; } // 没子弹自动换弹
 
-    fireCooldown = w.fireCooldown;  // 这把武器的射速
+    fireCooldown = w.fireCooldown / weaponSpecs[w.id].fireMult; // 射速（专精后更快，P5）
     magAmmo--;                      // 消耗一颗子弹
     recoil = 1;                     // 后坐动画
     playWeaponSound(w.sound);       // 对应枪声
 
-    // 霰弹枪一次打多颗弹丸，其它武器打一颗
-    for (let i = 0; i < w.pellets; i++) shootPellet(w);
+    // 霰弹枪一次打多颗弹丸（专精后弹丸更多，P5），其它武器打一颗
+    const pelletCount = w.pellets + weaponSpecs[w.id].pelletsBonus;
+    for (let i = 0; i < pelletCount; i++) shootPellet(w);
 
     spawnMuzzleFlash(getMuzzleWorldPos()); // 枪口闪光
 
@@ -914,7 +1039,25 @@
         if (obj.userData.isTarget) {
           flashTarget(obj);
         } else if (obj.userData.isEnemy) {
-          damageEnemy(obj.userData.enemyRef, getWeaponDamage(w));
+          // 伤害浮动 + 暴击 + 飘字 + 溅血 + 爆头判定（P1 增强）
+          const e = obj.userData.enemyRef;
+          const roll = rollDamage(getWeaponDamage(w));
+          const headY = e.headY || 1.95; // 头部判定线（Boss 更高）
+          const headshot = hitPoint.y > e.group.position.y + headY;
+          if (e.isBoss) {
+            damageBoss(e, roll.damage, roll.crit, headshot, hitPoint);
+          } else {
+            damageEnemy(e, roll.damage);
+            spawnDamageNumber(hitPoint, roll.damage, roll.crit);
+            spawnBlood(hitPoint, headshot || roll.crit);
+            if (headshot) playHeadshotSound(); // 爆头：低沉的“嘭”声
+          }
+          // 狙击专武：打击有概率回复生命（绿色回血数字，扩展）
+          if (weaponId === 'sniper' && weaponSpecs.sniper.lifesteal > 0 && Math.random() < weaponSpecs.sniper.lifesteal) {
+            const healAmt = Math.max(1, Math.round(maxHealth * 0.05));
+            heal(healAmt);
+            spawnDamageNumber(hitPoint, healAmt, false, true);
+          }
         }
         showHitMarker();
       }
@@ -987,8 +1130,8 @@
     const points = new THREE.Points(geo, mat);
     scene.add(points);
 
-    // 防止一次生成太多粒子拖慢性能：超过 20 组就丢掉最老的
-    if (sparkSystems.length > 20) {
+    // 防止一次生成太多粒子拖慢性能：超过 40 组就丢掉最老的（P2 Boss 火焰会用到）
+    if (sparkSystems.length > 40) {
       const old = sparkSystems.shift();
       scene.remove(old.points);
       old.points.geometry.dispose();
@@ -1216,7 +1359,7 @@
     if (staminaRegenDelay > 0) {
       staminaRegenDelay -= dt;
     } else {
-      stamina = Math.min(MAX_STAMINA, stamina + STAMINA_REGEN * dt);
+      stamina = Math.min(MAX_STAMINA, stamina + STAMINA_REGEN * staminaRegenMult * dt);
     }
 
     // ---- 眼睛高度：站立 1.7 米，滑铲 0.8 米，平滑过渡 ----
@@ -1238,12 +1381,12 @@
 
   // 扣血（P3 敌人打玩家时调用；本阶段先把接口备好）
   function takeDamage(amount) {
-    health = Math.max(0, Math.min(MAX_HEALTH, health - amount));
+    health = Math.max(0, Math.min(maxHealth, health - amount));
   }
 
   // 回血（升级 / 道具时调用）
   function heal(amount) {
-    health = Math.max(0, Math.min(MAX_HEALTH, health + amount));
+    health = Math.max(0, Math.min(maxHealth, health + amount));
   }
 
   // 暂停 / 切后台时重置输入状态，防止恢复后角色乱跑或“空中瞬移”
@@ -1262,8 +1405,8 @@
   function updateHUD() {
     const hpEl = document.getElementById('healthFill');
     const hpText = document.getElementById('healthText');
-    hpEl.style.width = (health / MAX_HEALTH) * 100 + '%';
-    hpText.textContent = Math.round(health) + '/' + MAX_HEALTH;
+    hpEl.style.width = (health / maxHealth) * 100 + '%';
+    hpText.textContent = Math.round(health) + '/' + maxHealth;
 
     const stEl = document.getElementById('staminaFill');
     const stText = document.getElementById('staminaText');
@@ -1298,6 +1441,16 @@
     document.getElementById('streakCount').textContent = '连杀 ' + killstreak;
     // 准星：开狙击镜时隐藏（换成狙击镜遮罩）
     document.getElementById('crosshair').style.opacity = locked && !playerDead && !sniperZoomed ? 1 : 0;
+
+    // Boss 血条（P2）：Boss 战时显示
+    const bossBar = document.getElementById('bossBar');
+    const bossFill = document.getElementById('bossFill');
+    if (bossFightActive && boss) {
+      bossBar.classList.remove('hidden');
+      bossFill.style.width = Math.max(0, boss.hp / boss.maxHp * 100) + '%';
+    } else {
+      bossBar.classList.add('hidden');
+    }
   }
 
   // ---------- 6.6 敌人系统（P3）：机器人 / 三状态 AI / 血条 / 爆炸重生 ----------
@@ -1436,8 +1589,9 @@
       gunTip: model.gunTip,
       eyeMat: model.eyeMat,
       bar: bar,
+      headY: 1.95,                     // 头部判定线高度（P1：爆头用）
       spawnX: spawnX, spawnZ: spawnZ,
-      hp: ENEMY_MAX_HP, maxHp: ENEMY_MAX_HP,
+      hp: Math.round(ENEMY_MAX_HP * enemyHpMult), maxHp: Math.round(ENEMY_MAX_HP * enemyHpMult),
       alive: true,
       respawnTimer: 0,
       state: 'patrol',         // patrol 巡逻 / chase 追击 / return 回巡逻
@@ -1516,7 +1670,7 @@
         e.loseTimer = 0;
         if (dist > STOP_DIST) {
           // 追向玩家，但保持一点距离
-          moveToward(e, px, pz, CHASE_SPEED, dt);
+          moveToward(e, px, pz, CHASE_SPEED * enemySpeedMult, dt);
         } else {
           turnToward(e, px, pz, 8, dt);
         }
@@ -1528,7 +1682,7 @@
       if (canSee) { e.state = 'chase'; e.loseTimer = 0; }
       else {
         const wp = nearestWaypoint(e);
-        moveToward(e, wp.x, wp.z, PATROL_SPEED, dt);
+        moveToward(e, wp.x, wp.z, PATROL_SPEED * enemySpeedMult, dt);
         if (distToPoint(e, wp) < 1.5) e.state = 'patrol';
       }
     }
@@ -1544,7 +1698,7 @@
   // 巡逻：朝当前路点走，走到就换下一个
   function moveToWaypoint(e, dt) {
     const wp = e.waypoints[e.wpIndex];
-    moveToward(e, wp.x, wp.z, PATROL_SPEED, dt);
+    moveToward(e, wp.x, wp.z, PATROL_SPEED * enemySpeedMult, dt);
     if (distToPoint(e, wp) < 1.2) {
       e.wpIndex = (e.wpIndex + 1) % e.waypoints.length;
     }
@@ -1609,7 +1763,7 @@
     const aim = new THREE.Vector3(player.pos.x, player.pos.y + 1.2, player.pos.z);
 
     // 根据命中率决定瞄准方向：命中就瞄玩家，否则瞄玩家附近随机点（打偏）
-    const hit = Math.random() < ENEMY_ACCURACY;
+    const hit = Math.random() < (ENEMY_ACCURACY + enemyAccBonus);
     let dir;
     if (hit) {
       dir = new THREE.Vector3().subVectors(aim, from).normalize();
@@ -1632,7 +1786,7 @@
       end = hits[0].point.clone();
       if (hits[0].object === playerHitbox) {
         // 打中玩家
-        takeDamage(ENEMY_DAMAGE);
+        takeDamage(ENEMY_DAMAGE * enemyDmgMult);
         showDamageFlash();
         spawnSparks(end, { color: 0xff3355, count: 8, speed: 5, life: 0.3, gravity: 10, size: 0.1 });
       } else {
@@ -1693,12 +1847,16 @@
 
   // 敌人死亡：隐藏 + 爆炸粒子 + 延迟重生计时
   function killEnemy(e) {
-    addXp(KILL_XP); // 击杀敌人 +20 经验
+    addXp(KILL_XP * killXpMult); // 击杀敌人 +20 经验（地狱难度 ×2，P6）
     totalKills++;    // 本局总击杀 +1
     killstreak++;    // 当前连杀 +1
     // 连杀播报：3 双杀 / 5 三杀 / 10 大杀特杀
     if (killstreak === 3 || killstreak === 5 || killstreak === 10) {
       announceKillstreak(killstreak);
+    }
+    // 连杀达到 10：触发 Boss 战（全场只一次，P2）
+    if (killstreak === 10 && !bossTriggered) {
+      startBossFight();
     }
     e.alive = false;
     e.hp = 0;
@@ -1714,7 +1872,7 @@
   // 延迟重生：恢复满血，回到出生点，重新巡逻
   function respawnEnemy(e) {
     e.alive = true;
-    e.hp = ENEMY_MAX_HP;
+    e.hp = e.maxHp;
     e.state = 'patrol';
     e.loseTimer = 0;
     e.flashTimer = 0;
@@ -1818,7 +1976,8 @@
 
   // 某把武器当前的实际伤害 = 武器基础伤害 ×（1 + 每级 +10%）
   function getWeaponDamage(w) {
-    return w.damage * (1 + 0.1 * (level - 1));
+    // 专精伤害倍率（P5）叠加在基础伤害上
+    return w.damage * weaponSpecs[w.id].dmgMult * (1 + 0.1 * (level - 1)) * (1 + weaponDamageBonus);
   }
 
   // 增加经验；经验攒够就升级（回满血，伤害自动 +10%）
@@ -1827,9 +1986,18 @@
     while (xp >= xpNeeded()) {
       xp -= xpNeeded();      // 扣掉升这一级消耗的经验
       level++;               // 升级
-      health = MAX_HEALTH;   // 升级回满血
+      health = maxHealth;    // 升级回满血
       showLevelUp();         // 屏幕提示
       playLevelUpSound();    // 升级音效
+      // 每 5 级触发强化三选一弹窗（P4）
+      if (level % 5 === 0) queueUpgradeModal();
+      // 15 级武器专精弹窗（P5，与强化弹窗排队显示）
+      if (level === 15) queueSpecializationModal();
+      // 20 级路线选择弹窗（P6，与强化弹窗排队显示）
+      if (level === 20) queueRouteModal();
+      // 25 / 35 级专属武器金色弹窗（扩展，与强化弹窗排队显示）
+      if (level === 25) queueWeaponSoulModal(25);
+      if (level === 35) queueWeaponSoulModal(35);
     }
   }
 
@@ -1865,6 +2033,7 @@
 
   // 切换武器（按 1/2/3）：存好旧枪子弹，取出新枪子弹，并重建枪模型
   function switchWeapon(id) {
+    if (paused) return;               // 暂停时不能切枪（P0）
     if (playerDead) return;           // 死亡时不能切枪
     if (id === weaponId) return;      // 已经在用这把枪
     weaponAmmo[weaponId] = magAmmo;   // 保存当前武器的剩余子弹
@@ -1879,11 +2048,12 @@
 
   // 开始换弹：弹匣打空自动调用，或按 R 手动
   function startReload() {
+    if (paused) return;                // 暂停时不能换弹（P0）
     const w = WEAPONS[weaponId];
     if (reloading) return;                 // 已经在换
     if (magAmmo >= w.magSize) return;      // 弹匣是满的不用换
     reloading = true;
-    reloadTimer = w.reloadTime;
+    reloadTimer = w.reloadTime * weaponSpecs[w.id].reloadMult; // 专精后换弹更快（P5）
     playReloadSound();
   }
 
@@ -1902,6 +2072,7 @@
 
   // 切换狙击镜（只有拿狙击枪时有效，按 G）
   function toggleSniperZoom() {
+    if (paused) return;            // 暂停时不能开镜（P0）
     if (playerDead) return;        // 死亡时不能开镜
     if (weaponId !== 'sniper') return;
     sniperZoomed = !sniperZoomed;
@@ -2020,6 +2191,9 @@
     document.getElementById('resultKills').textContent = totalKills;
     document.getElementById('resultTime').textContent = formatTime(runTime);
     document.getElementById('resultLevel').textContent = 'Lv.' + level;
+    // Boss 战中死亡：标题改为“Boss 战失败”，按 R 重开本局 Boss 战（P2）
+    document.getElementById('resultOverlay').querySelector('h2').textContent =
+      bossFightActive ? 'Boss 战失败' : '机体损毁';
     document.getElementById('resultOverlay').classList.remove('hidden');
   }
 
@@ -2027,9 +2201,17 @@
   function restartGame() {
     // 玩家状态
     playerDead = false;
-    health = MAX_HEALTH;
+    maxHealth = MAX_HEALTH;      // 生命上限恢复初始（P3 奖励清零）
+    health = maxHealth;
+    weaponDamageBonus = 0;       // 武器伤害加成清零（P3）
+    enemyHpMult = 1;             // 敌人增强清零（P3）
+    enemyDmgMult = 1;
+    enemySpeedMult = 1;
+    enemyAccBonus = 0;
     stamina = MAX_STAMINA;
     staminaRegenDelay = 0;
+    staminaRegenMult = 1;         // 体力回复倍率清零（P4）
+    killXpMult = 1;                // 击杀经验倍率清零（P6）
     level = 1;
     xp = 0;
     killstreak = 0;
@@ -2039,6 +2221,10 @@
     weaponId = 'rifle';
     for (const k in weaponAmmo) weaponAmmo[k] = WEAPONS[k].magSize;
     magAmmo = WEAPONS.rifle.magSize;
+    // 武器专精清零（P5）
+    weaponSpecs.rifle.dmgMult = 1; weaponSpecs.rifle.fireMult = 1; weaponSpecs.rifle.pelletsBonus = 0; weaponSpecs.rifle.reloadMult = 1;
+    weaponSpecs.shotgun.dmgMult = 1; weaponSpecs.shotgun.fireMult = 1; weaponSpecs.shotgun.pelletsBonus = 0; weaponSpecs.shotgun.reloadMult = 1;
+    weaponSpecs.sniper.dmgMult = 1; weaponSpecs.sniper.fireMult = 1; weaponSpecs.sniper.pelletsBonus = 0; weaponSpecs.sniper.reloadMult = 1; weaponSpecs.sniper.lifesteal = 0;
     reloading = false;
     reloadTimer = 0;
     sniperZoomed = false;
@@ -2056,6 +2242,19 @@
     rebuildGun();
     // 敌人：全部复活回出生点
     for (const e of enemies) respawnEnemy(e);
+    // Boss 战状态重置（P2）：可再次触发，环境还原
+    bossTriggered = false;
+    bossFightActive = false;
+    clearBossProjectiles();
+    hideBossArena();
+    scene.background.copy(MAIN_BG_COLOR);
+    scene.fog = MAIN_FOG;
+    if (boss && boss.group) {
+      const bi = shootables.indexOf(boss.group);
+      if (bi >= 0) shootables.splice(bi, 1);
+      scene.remove(boss.group);
+    }
+    boss = null;
     // 清掉残留特效（弹道 / 火花 / 爆炸闪光）
     for (const t of tracers) { scene.remove(t.line); t.line.geometry.dispose(); t.line.material.dispose(); }
     tracers.length = 0;
@@ -2065,7 +2264,912 @@
     explosionFlashes.length = 0;
     // 隐藏结算界面
     document.getElementById('resultOverlay').classList.add('hidden');
+    // 清空弹窗队列（P4）
+    modalQueue.length = 0;
+    modalActive = false;
+    currentModal = null;
+    document.getElementById('choiceModal').classList.add('hidden');
     updateHUD();
+  }
+
+  // ---------- 6.12 数值可视化与暴击（P1）：伤害飘字 / 随机浮动 / 暴击 / 溅血 ----------
+
+  // 酒红色溅血特效：命中敌人时在伤口处喷一小撮（爆头/暴击时更猛）
+  function spawnBlood(pos, strong) {
+    const count = strong ? 12 : 7;
+    spawnSparks(pos, { count: count, color: 0x9c1f3a, speed: strong ? 5 : 3.5, life: 0.4, gravity: 16, size: 0.13 });
+    spawnSparks(pos, { count: Math.ceil(count / 2), color: 0x5a0f1e, speed: 2.5, life: 0.5, gravity: 14, size: 0.1 });
+  }
+
+  // 爆头音效：低沉的“嘭”声（P1 增强）
+  function playHeadshotSound() {
+    if (!audioCtx) return;
+    const t0 = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(150, t0);
+    osc.frequency.exponentialRampToValueAtTime(45, t0 + 0.18);
+    g.gain.setValueAtTime(0.5, t0);
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.22);
+    osc.connect(g).connect(audioCtx.destination);
+    osc.start(t0);
+    osc.stop(t0 + 0.25);
+    if (noiseBuffer) {
+      const src = audioCtx.createBufferSource();
+      src.buffer = noiseBuffer;
+      const filter = audioCtx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.value = 900;
+      const ng = audioCtx.createGain();
+      ng.gain.setValueAtTime(0.35, t0);
+      ng.gain.exponentialRampToValueAtTime(0.001, t0 + 0.15);
+      src.connect(filter).connect(ng).connect(audioCtx.destination);
+      src.start(t0, Math.random());
+      src.stop(t0 + 0.18);
+    }
+  }
+
+  // 伤害结算：基础伤害 ±20% 随机浮动；15% 暴击率，暴击伤害 ×1.5
+  function rollDamage(base) {
+    const float = base * (0.8 + Math.random() * 0.4); // ±20% 浮动
+    const crit = Math.random() < CRIT_CHANCE;          // 15% 暴击
+    return { damage: float * (crit ? 1.5 : 1), crit: crit };
+  }
+
+  // 用 Canvas 现场画伤害数字文字，返回纹理（普通=红，暴击=橙红大号带前缀）
+  function makeDamageTexture(text, isCrit, isHeal) {
+    const w = isCrit ? 640 : 320;
+    const h = isCrit ? 200 : 128;
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, w, h);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = 'bold ' + (isCrit ? 76 : 60) + 'px Arial, sans-serif';
+    if (isCrit) {
+      ctx.shadowColor = '#ff5500';
+      ctx.shadowBlur = 14;
+      ctx.fillStyle = '#ff8800';
+      ctx.strokeStyle = '#5a1a00';
+    } else if (isHeal) {
+      // 回血数字：绿色（狙击专武吸血用，扩展）
+      ctx.shadowColor = '#00ff88';
+      ctx.shadowBlur = 10;
+      ctx.fillStyle = '#44ff88';
+      ctx.strokeStyle = '#003322';
+    } else {
+      ctx.shadowColor = '#ff0000';
+      ctx.shadowBlur = 8;
+      ctx.fillStyle = '#ff3b3b';
+      ctx.strokeStyle = '#4a0000';
+    }
+    ctx.lineWidth = 4;
+    ctx.strokeText(text, w / 2, h / 2);
+    ctx.fillText(text, w / 2, h / 2);
+    return new THREE.CanvasTexture(canvas);
+  }
+
+  // 在 3D 命中位置生成伤害飘字：上浮 + 渐隐，约 0.8 秒后消失
+  function spawnDamageNumber(pos, damage, isCrit, isHeal) {
+    // 飘字太多时丢最老的，防止卡顿
+    if (damageNumbers.length >= DMG_NUM_CAP) {
+      const old = damageNumbers.shift();
+      scene.remove(old.obj);
+      old.obj.material.map.dispose();
+      old.obj.material.dispose();
+    }
+    const text = isCrit ? '暴击! ' + Math.round(damage) : String(Math.round(damage));
+    const tex = makeDamageTexture(text, isCrit, isHeal);
+    const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false });
+    const sprite = new THREE.Sprite(mat);
+    const ratio = (isCrit ? 640 : 320) / (isCrit ? 200 : 128); // 画布宽高比
+    const baseW = isCrit ? 3.4 : 2.0; // 10 米处的基准宽度（P1 增强：更大）
+    sprite.scale.set(baseW, baseW / ratio, 1);
+    // 位置：命中点上方一点 + 随机左右偏移（避免多个数字叠在一起）
+    sprite.position.set(
+      pos.x + (Math.random() - 0.5) * 0.4,
+      pos.y + 0.5,
+      pos.z + (Math.random() - 0.5) * 0.4
+    );
+    scene.add(sprite);
+    // 记录基准尺寸，每帧按与玩家的距离放大（远处也看得清，P1 增强）
+    damageNumbers.push({ obj: sprite, baseW: baseW, ratio: ratio, life: 0.8, maxLife: 0.8 });
+  }
+
+  // 每帧更新伤害飘字：上浮 + 渐隐，结束后清理
+  function updateDamageNumbers(dt) {
+    for (let i = damageNumbers.length - 1; i >= 0; i--) {
+      const d = damageNumbers[i];
+      d.life -= dt;
+      d.obj.position.y += 1.6 * dt; // 上浮
+      // 距离自适应：以 10 米为基准，越远越大，保证屏幕上大小接近恒定（P1 增强）
+      const dist = Math.max(1, d.obj.position.distanceTo(camera.position));
+      const k = Math.min(4, dist / 10);
+      d.obj.scale.set(d.baseW * k, (d.baseW / d.ratio) * k, 1);
+      d.obj.material.opacity = Math.max(0, d.life / d.maxLife); // 渐隐
+      if (d.life <= 0) {
+        scene.remove(d.obj);
+        d.obj.material.map.dispose();
+        d.obj.material.dispose();
+        damageNumbers.splice(i, 1);
+      }
+    }
+  }
+
+  // ---------- 6.13 Boss 战（P2）：霓虹·大圣 / 黄昏水面场景 / 三行为 AI ----------
+
+  // 建造 Boss 场景：黄昏橙红天空 + 浓雾 + 镜面浅水 + 枯树岩石剪影（一次性，显隐切换）
+  function buildBossArena() {
+    const OX = BOSS_ARENA_X, OZ = BOSS_ARENA_Z;
+    const add = (obj) => { obj.visible = false; scene.add(obj); bossSceneObjects.push(obj); };
+
+    // 镜面浅水（高金属低粗糙，模拟反射）
+    const water = new THREE.Mesh(
+      new THREE.PlaneGeometry(140, 140),
+      new THREE.MeshStandardMaterial({ color: 0x1a0f0a, metalness: 0.9, roughness: 0.12 })
+    );
+    water.rotation.x = -Math.PI / 2;
+    water.position.set(OX, 0, OZ);
+    add(water);
+
+    // 水面上淡淡的橙色网格线
+    const gridTex = makeBossWaterTexture();
+    const grid = new THREE.Mesh(
+      new THREE.PlaneGeometry(140, 140),
+      new THREE.MeshBasicMaterial({ map: gridTex, transparent: true, opacity: 0.3, blending: THREE.AdditiveBlending, depthWrite: false })
+    );
+    grid.rotation.x = -Math.PI / 2;
+    grid.position.set(OX, 0.03, OZ);
+    add(grid);
+
+    // 落日（低悬的橙色发光球）
+    const sun = new THREE.Mesh(
+      new THREE.SphereGeometry(16, 24, 24),
+      new THREE.MeshBasicMaterial({ color: 0xff6a1a })
+    );
+    sun.position.set(OX - 45, 34, OZ - 75);
+    add(sun);
+
+    // 远处扭曲的黑色枯树（剪影）
+    const treeSpots = [[-50, -45], [48, -40], [-42, 40], [50, 42], [-8, -52], [10, 52]];
+    treeSpots.forEach((sp, i) => add(createDeadTree(OX + sp[0], OZ + sp[1], 1 + (i % 3) * 0.35)));
+
+    // 岩石剪影
+    const rockSpots = [[-30, -20, 2.5], [28, -25, 3.2], [-25, 25, 2.0], [32, 20, 2.8], [0, -10, 1.5]];
+    rockSpots.forEach((r) => {
+      const rock = new THREE.Mesh(
+        new THREE.IcosahedronGeometry(r[2], 0),
+        new THREE.MeshStandardMaterial({ color: 0x0c0706, roughness: 0.9, metalness: 0.1 })
+      );
+      rock.position.set(OX + r[0], r[2] * 0.5, OZ + r[1]);
+      rock.rotation.set(Math.random(), Math.random() * 3, Math.random());
+      add(rock);
+    });
+
+    // 暗金红氛围灯
+    const light1 = new THREE.PointLight(0xff7722, 1.8, 70, 2);
+    light1.position.set(OX, 10, OZ - 20);
+    add(light1);
+    const light2 = new THREE.PointLight(0xff3311, 1.2, 60, 2);
+    light2.position.set(OX - 40, 8, OZ + 35);
+    add(light2);
+    const light3 = new THREE.PointLight(0xffcc66, 0.8, 50, 2);
+    light3.position.set(OX + 40, 8, OZ - 30);
+    add(light3);
+
+    bossArenaBuilt = true;
+  }
+
+  // 用 Canvas 画 Boss 水面的橙色网格纹理
+  function makeBossWaterTexture() {
+    const size = 256;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, size, size);
+    ctx.strokeStyle = 'rgba(255, 120, 40, 0.5)';
+    ctx.lineWidth = 2;
+    for (let i = 0; i <= size; i += 64) {
+      ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, size); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(size, i); ctx.stroke();
+    }
+    return new THREE.CanvasTexture(canvas);
+  }
+
+  // 创建一棵扭曲的黑色枯树（剪影）
+  function createDeadTree(x, z, scale) {
+    const g = new THREE.Group();
+    const mat = new THREE.MeshStandardMaterial({ color: 0x0a0508, roughness: 0.9, metalness: 0.1 });
+    let prev = new THREE.Object3D();
+    g.add(prev);
+    // 树干：几段细圆柱，逐段倾斜，形成扭曲感
+    for (let i = 0; i < 4; i++) {
+      const seg = new THREE.Mesh(new THREE.CylinderGeometry(0.28 * (1 - i * 0.18), 0.34 * (1 - i * 0.15), 2.2, 6), mat);
+      seg.position.y = 1.1;
+      prev.add(seg);
+      const next = new THREE.Object3D();
+      next.position.y = 2.05;
+      next.rotation.z = (i % 2 === 0 ? 1 : -1) * (0.12 + Math.random() * 0.15);
+      prev.add(next);
+      prev = next;
+    }
+    // 枯枝
+    for (let i = 0; i < 3; i++) {
+      const branch = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.12, 2.2, 5), mat);
+      branch.position.set(0, 4.2 + i * 0.4, 0);
+      branch.rotation.z = (i === 0 ? -0.9 : (i === 1 ? 0.7 : 1.1));
+      g.add(branch);
+    }
+    g.position.set(x, 0, z);
+    g.scale.setScalar(scale);
+    return g;
+  }
+
+  // 创建 Boss「霓虹·大圣」模型（约普通机器人 2 倍高，甲胄分段躯干 + 金箍棒 + 雉鸡翎）
+  function createBossModel() {
+    const g = new THREE.Group();
+    const metal = new THREE.MeshStandardMaterial({ color: 0x3a2a1a, roughness: 0.5, metalness: 0.7 });
+    const gold = new THREE.MeshStandardMaterial({ color: 0x664d22, emissive: 0xffaa33, emissiveIntensity: 1.2 });
+    const eyeMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xff4400, emissiveIntensity: 2.5 });
+    const p = (geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); g.add(m); return m; };
+
+    // 双腿
+    p(new THREE.BoxGeometry(0.9, 1.8, 1.0), metal, -0.7, 0.9, 0);
+    p(new THREE.BoxGeometry(0.9, 1.8, 1.0), metal, 0.7, 0.9, 0);
+    // 腰甲 + 金纹
+    p(new THREE.BoxGeometry(1.9, 0.9, 1.3), metal, 0, 2.3, 0);
+    p(new THREE.BoxGeometry(1.95, 0.35, 1.35), gold, 0, 2.75, 0);
+    // 分段甲胄躯干
+    p(new THREE.BoxGeometry(1.7, 0.8, 1.1), metal, 0, 3.35, 0);
+    p(new THREE.BoxGeometry(1.5, 0.7, 1.0), metal, 0, 4.1, 0);
+    p(new THREE.BoxGeometry(1.2, 0.6, 0.9), metal, 0, 4.75, 0);
+    // 胸口金纹
+    p(new THREE.BoxGeometry(0.7, 0.4, 0.12), gold, 0, 4.0, 0.56);
+    // 肩甲 + 手臂
+    p(new THREE.BoxGeometry(0.7, 0.5, 0.9), gold, -1.15, 5.0, 0);
+    p(new THREE.BoxGeometry(0.7, 0.5, 0.9), gold, 1.15, 5.0, 0);
+    p(new THREE.BoxGeometry(0.45, 1.6, 0.5), metal, -1.5, 3.2, 0);
+    p(new THREE.BoxGeometry(0.45, 1.6, 0.5), metal, 1.5, 3.2, 0);
+    // 头 + 火红眼
+    p(new THREE.BoxGeometry(0.9, 0.8, 0.85), metal, 0, 5.45, 0);
+    p(new THREE.BoxGeometry(0.22, 0.12, 0.08), eyeMat, -0.18, 5.5, 0.44);
+    p(new THREE.BoxGeometry(0.22, 0.12, 0.08), eyeMat, 0.18, 5.5, 0.44);
+    // 雉鸡翎（两根细长弯曲）
+    const featherL = createFeather();
+    featherL.position.set(-0.28, 5.9, -0.1);
+    g.add(featherL);
+    const featherR = createFeather();
+    featherR.scale.x = -1;
+    featherR.position.set(0.28, 5.9, -0.1);
+    g.add(featherR);
+    // 金箍棒（发光金棍，持于右侧）
+    const staff = p(new THREE.CylinderGeometry(0.09, 0.09, 7.0, 10), gold, 1.5, 4.0, 0.5);
+    staff.rotation.z = -0.18;
+    // 棒尖标记点（发棍气波 / 火焰用）
+    const staffTip = new THREE.Object3D();
+    staffTip.position.set(1.5, 7.6, 0.5);
+    g.add(staffTip);
+    return { group: g, staff: staff, staffTip: staffTip, featherL: featherL, featherR: featherR };
+  }
+
+  // 创建一根雉鸡翎（几段细圆柱弯曲而成，尾端金色发光）
+  function createFeather() {
+    const f = new THREE.Group();
+    const mat = new THREE.MeshStandardMaterial({ color: 0x8a2a10, emissive: 0x661100, emissiveIntensity: 0.4 });
+    const tipMat = new THREE.MeshStandardMaterial({ color: 0xffcc66, emissive: 0xffaa33, emissiveIntensity: 1.8 });
+    let prev = new THREE.Object3D();
+    f.add(prev);
+    for (let i = 0; i < 5; i++) {
+      const seg = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.05, 1.3, 6), mat);
+      seg.position.y = 0.65;
+      prev.add(seg);
+      const next = new THREE.Object3D();
+      next.position.y = 1.25;
+      next.rotation.x = -0.4;
+      prev.add(next);
+      prev = next;
+    }
+    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.07, 6, 6), tipMat);
+    prev.add(tip);
+    return f;
+  }
+
+  // 生成 Boss（含可被射击、闪白数据、三行为 AI 状态）
+  function spawnBoss() {
+    const OX = BOSS_ARENA_X, OZ = BOSS_ARENA_Z;
+    const model = createBossModel();
+    model.group.position.set(OX, 0, OZ - 4);
+    model.group.rotation.y = 0; // 面朝 +Z（玩家方向）
+    scene.add(model.group);
+    // 记录每个网格原始发光参数（闪白恢复用）
+    model.group.traverse((c) => {
+      if (c.isMesh) {
+        c.userData.baseEmissive = c.material.emissive.clone();
+        c.userData.baseIntensity = c.material.emissiveIntensity;
+      }
+    });
+    boss = {
+      group: model.group,
+      staff: model.staff,
+      staffTip: model.staffTip,
+      featherL: model.featherL,
+      featherR: model.featherR,
+      hp: BOSS_MAX_HP, maxHp: BOSS_MAX_HP,
+      alive: true,
+      isBoss: true,
+      headY: 5.1,              // Boss 头部判定线（爆头用）
+      faceYaw: 0,
+      flashTimer: 0,
+      action: 'idle',          // idle / windup / chargewind / wavewind
+      actionTimer: 0,
+      charging: false,
+      chargeDir: null,
+      chargeTime: 0,
+      pattern: 0,              // 1 挥棍 2 冲撞 3 棍气波（轮换）
+      patternTimer: 1.0,
+      fireAcc: 0,
+      bobPhase: Math.random() * 6.28
+    };
+    model.group.userData.isEnemy = true;
+    model.group.userData.enemyRef = boss;
+    shootables.push(model.group);
+    showBossMsg('Boss 战 · 霓虹·大圣');
+    playBossRoarSound();
+  }
+
+  // 连杀 10 触发 Boss 战：黑屏过渡 → 传送 → 换天换雾 → 生成 Boss
+  function startBossFight() {
+    if (bossTriggered || bossFightActive) return;
+    bossTriggered = true;
+    bossFightActive = true; // 先置 true，黑屏期间世界已切到 Boss 逻辑
+    const trans = document.getElementById('transitionOverlay');
+    trans.classList.add('show');
+    setTimeout(() => {
+      enterBossArena();
+      setTimeout(() => trans.classList.remove('show'), 200);
+    }, 650);
+  }
+
+  // 黑屏过渡后真正进入 Boss 场景：隐藏敌人 / 建场景 / 换天 / 传送 / 生成 Boss
+  function enterBossArena() {
+    for (const e of enemies) { e.group.visible = false; e.bar.group.visible = false; }
+    if (!bossArenaBuilt) buildBossArena();
+    showBossArena();
+    // 换天空与雾（黄昏橙红 + 浓雾）
+    scene.background.copy(BOSS_BG_COLOR);
+    scene.fog = BOSS_FOG;
+    // 传送玩家到 Boss 场景（面朝 Boss）
+    player.pos.set(BOSS_ARENA_X, 0, BOSS_ARENA_Z + 15);
+    player.yaw = 0; player.pitch = 0; player.velY = 0; player.onGround = true;
+    eyeHeight = EYE_NORMAL;
+    applyCameraRotation();
+    // 生成 Boss
+    spawnBoss();
+  }
+
+  // Boss 战结束：传送回主地图，还原环境，恢复普通敌人（P3 会在此加永久奖励）
+  function endBossFight() {
+    bossFightActive = false;
+    clearBossProjectiles();
+    // 传送回主地图出生点
+    player.pos.set(0, 0, 22);
+    player.yaw = Math.PI; player.pitch = 0; player.velY = 0; player.onGround = true;
+    eyeHeight = EYE_NORMAL;
+    applyCameraRotation();
+    // 还原天空与雾
+    scene.background.copy(MAIN_BG_COLOR);
+    scene.fog = MAIN_FOG;
+    // 移除并隐藏 Boss 场景
+    hideBossArena();
+    if (boss && boss.group) {
+      const idx = shootables.indexOf(boss.group);
+      if (idx >= 0) shootables.splice(idx, 1);
+      scene.remove(boss.group);
+      boss.group.traverse((c) => { if (c.isMesh) { c.geometry.dispose(); c.material.dispose(); } });
+    }
+    boss = null;
+    // 回归增幅：普通敌人大幅增强（P3），再静默复活
+    applyEnemyBuffs();
+    restoreEnemies();
+    updateHUD();
+  }
+
+  // Boss 战死亡后按 R：重开本局 Boss 战（满血回 Boss 场景，Boss 满血复活）
+  function restartBossFight() {
+    playerDead = false;
+    health = maxHealth;
+    stamina = MAX_STAMINA;
+    player.pos.set(BOSS_ARENA_X, 0, BOSS_ARENA_Z + 15);
+    player.yaw = 0; player.pitch = 0; player.velY = 0; player.onGround = true;
+    eyeHeight = EYE_NORMAL;
+    applyCameraRotation();
+    if (boss) {
+      boss.hp = boss.maxHp;
+      boss.alive = true;
+      boss.group.visible = true;
+      boss.group.position.set(BOSS_ARENA_X, 0, BOSS_ARENA_Z - 4);
+      boss.action = 'idle'; boss.actionTimer = 0;
+      boss.charging = false; boss.chargeDir = null; boss.chargeTime = 0;
+      boss.pattern = 0; boss.patternTimer = 1.5;
+      setEnemyFlash(boss, false);
+    }
+    clearBossProjectiles();
+    document.getElementById('resultOverlay').classList.add('hidden');
+    updateHUD();
+  }
+
+  // 恢复普通敌人：满血回出生点（静默恢复，无爆炸声）
+  function restoreEnemies() {
+    for (const e of enemies) {
+      e.alive = true;
+      e.hp = e.maxHp;
+      e.state = 'patrol';
+      e.group.visible = true;
+      e.bar.group.visible = true;
+      e.group.position.set(e.spawnX, 0, e.spawnZ);
+      setEnemyFlash(e, false);
+      updateEnemyBar(e);
+    }
+  }
+
+  // 显示 / 隐藏 Boss 场景
+  function showBossArena() { bossSceneObjects.forEach((o) => { o.visible = true; }); }
+  function hideBossArena() { bossSceneObjects.forEach((o) => { o.visible = false; }); }
+
+  // Boss 受击：扣血 + 闪白 + 飘字 + 溅血 + 爆头音（复用 P1 系统）
+  function damageBoss(e, amount, crit, headshot, hitPoint) {
+    if (!e.alive) return;
+    e.hp = Math.max(0, e.hp - amount);
+    e.flashTimer = 0.1;
+    setEnemyFlash(e, true);
+    spawnDamageNumber(hitPoint, amount, crit);
+    spawnBlood(hitPoint, headshot || crit);
+    if (headshot) playHeadshotSound();
+    if (e.hp <= 0) killBoss(e);
+  }
+
+  // Boss 死亡：大爆炸 + 播报，短暂停留后回主地图（P3 会加永久奖励）
+  function killBoss(e) {
+    e.alive = false;
+    e.hp = 0;
+    const pos = e.group.position.clone();
+    pos.y = 2.5;
+    spawnExplosion(pos);
+    spawnExplosion(pos);
+    playExplosionSound();
+    clearBossProjectiles();
+    // P3：击败 Boss → 永久奖励 + 特殊音效 + 全屏播报
+    applyBossRewards();
+    playBossVictorySound();
+    showBossMsg('霓虹·大圣 已被击败！ 生命上限+20% · 全武器伤害+10%');
+    setTimeout(() => { if (bossFightActive) endBossFight(); }, 2500);
+  }
+
+  // Boss 攻击命中玩家：扣血 + 红闪
+  function damagePlayerFromBoss(amount) {
+    if (playerDead) return;
+    takeDamage(amount);
+    showDamageFlash();
+  }
+
+  // Boss AI：三行为轮换（近身挥棍 / 突进冲撞 / 中距离棍气波）
+  function updateBoss(dt) {
+    if (!boss || !boss.alive) return;
+    const b = boss;
+
+    updateBossProjectiles(dt); // 棍气波始终在飞
+
+    // 受击闪白计时
+    if (b.flashTimer > 0) {
+      b.flashTimer -= dt;
+      if (b.flashTimer <= 0) setEnemyFlash(b, false);
+    }
+
+    // 面向玩家
+    turnToward(b, player.pos.x, player.pos.z, 4, dt);
+
+    // 金箍棒燃烧火焰
+    spawnStaffFire(dt);
+
+    const dx = player.pos.x - b.group.position.x;
+    const dz = player.pos.z - b.group.position.z;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+
+    // 冲撞中：高速直线前进
+    if (b.charging) {
+      b.group.position.x += b.chargeDir.x * 16 * dt;
+      b.group.position.z += b.chargeDir.z * 16 * dt;
+      b.chargeTime -= dt;
+      if (dist < 2.6) { damagePlayerFromBoss(BOSS_DMG_CHARGE); stopCharge(b); }
+      if (b.chargeTime <= 0) stopCharge(b);
+      clampBossPos();
+      return;
+    }
+
+    // 蓄力动作
+    if (b.action === 'windup') { b.actionTimer -= dt; if (b.actionTimer <= 0) executeMelee(b); return; }
+    if (b.action === 'chargewind') { b.actionTimer -= dt; if (b.actionTimer <= 0) beginCharge(b); return; }
+    if (b.action === 'wavewind') { b.actionTimer -= dt; if (b.actionTimer <= 0) fireBossWave(b); return; }
+
+    // 空闲：远则靠近（推进到 8 米内，方便近身挥棍）
+    if (dist > 8) {
+      const step = Math.min(3.5 * dt, dist - 6);
+      b.group.position.x += (dx / dist) * step;
+      b.group.position.z += (dz / dist) * step;
+      clampBossPos();
+    }
+
+    // 三行为轮换
+    b.patternTimer -= dt;
+    if (b.patternTimer <= 0) {
+      b.pattern = (b.pattern % 3) + 1;
+      b.patternTimer = BOSS_PATTERN_INTERVAL;
+      if (b.pattern === 1) { // 近身挥棍
+        if (dist < 10) { b.action = 'windup'; b.actionTimer = 0.35; }
+      } else if (b.pattern === 2) { // 突进冲撞
+        b.action = 'chargewind'; b.actionTimer = 0.5;
+      } else { // 中距离棍气波
+        b.action = 'wavewind'; b.actionTimer = 0.6;
+      }
+    }
+
+    // 站立起伏 + 翎羽轻摆
+    b.group.position.y = Math.sin(time * 4 + b.bobPhase) * 0.08;
+    b.featherL.rotation.z = Math.sin(time * 2 + b.bobPhase) * 0.06;
+    b.featherR.rotation.z = -Math.sin(time * 2 + b.bobPhase) * 0.06;
+  }
+
+  // 挥棍一击：近身范围伤害 + 棍子挥动
+  function executeMelee(b) {
+    b.action = 'idle';
+    b.staff.rotation.x = -2.6; // 快速挥过
+    setTimeout(() => { if (b && b.staff) b.staff.rotation.x = -0.18; }, 200);
+    playMeleeSound();
+    const dx = player.pos.x - b.group.position.x;
+    const dz = player.pos.z - b.group.position.z;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+    if (dist < 10) damagePlayerFromBoss(BOSS_DMG_MELEE);
+  }
+
+  // 开始突进冲撞
+  function beginCharge(b) {
+    b.action = 'idle';
+    b.charging = true;
+    b.chargeTime = 0.9;
+    const dx = player.pos.x - b.group.position.x;
+    const dz = player.pos.z - b.group.position.z;
+    const d = Math.sqrt(dx * dx + dz * dz) || 1;
+    b.chargeDir = { x: dx / d, z: dz / d };
+    playChargeSound();
+  }
+  function stopCharge(b) {
+    b.charging = false;
+    b.chargeDir = null;
+  }
+
+  // 棍气波：中距离金橙色弹道
+  function fireBossWave(b) {
+    b.action = 'idle';
+    const from = new THREE.Vector3();
+    b.staffTip.getWorldPosition(from);
+    const aim = new THREE.Vector3(player.pos.x, player.pos.y + 1.2, player.pos.z);
+    const dir = new THREE.Vector3().subVectors(aim, from).normalize();
+    const sphere = new THREE.Mesh(
+      new THREE.SphereGeometry(0.5, 10, 10),
+      new THREE.MeshBasicMaterial({ color: 0xffaa33, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false })
+    );
+    sphere.position.copy(from);
+    scene.add(sphere);
+    bossProjectiles.push({ mesh: sphere, dir: dir, speed: 9, life: 6 });
+    playWaveSound();
+  }
+
+  // 棍气波飞行：命中玩家 / 出界 / 超时则爆开
+  function updateBossProjectiles(dt) {
+    for (let i = bossProjectiles.length - 1; i >= 0; i--) {
+      const p = bossProjectiles[i];
+      p.life -= dt;
+      p.mesh.position.addScaledVector(p.dir, p.speed * dt);
+      const dx = p.mesh.position.x - player.pos.x;
+      const dy = p.mesh.position.y - (player.pos.y + 1.0);
+      const dz = p.mesh.position.z - player.pos.z;
+      const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      let remove = false;
+      if (dist < 1.5) {
+        damagePlayerFromBoss(BOSS_DMG_WAVE);
+        remove = true;
+      } else if (p.life <= 0 || outOfBossArena(p.mesh.position)) {
+        remove = true;
+      }
+      if (remove) {
+        spawnSparks(p.mesh.position, { count: 10, color: 0xffaa33, speed: 5, life: 0.4, gravity: 6, size: 0.14 });
+        playExplosionSound();
+        scene.remove(p.mesh);
+        p.mesh.geometry.dispose();
+        p.mesh.material.dispose();
+        bossProjectiles.splice(i, 1);
+      }
+    }
+  }
+
+  // 判断坐标是否飞出 Boss 场景
+  function outOfBossArena(pos) {
+    return Math.abs(pos.x - BOSS_ARENA_X) > 70 || Math.abs(pos.z - BOSS_ARENA_Z) > 70;
+  }
+
+  // 清空 Boss 棍气波
+  function clearBossProjectiles() {
+    for (const p of bossProjectiles) {
+      scene.remove(p.mesh);
+      p.mesh.geometry.dispose();
+      p.mesh.material.dispose();
+    }
+    bossProjectiles.length = 0;
+  }
+
+  // 金箍棒燃烧火焰：从棒尖间歇喷出小团橙火
+  function spawnStaffFire(dt) {
+    if (!boss) return;
+    boss.fireAcc += dt;
+    if (boss.fireAcc >= 0.12) {
+      boss.fireAcc = 0;
+      const v = new THREE.Vector3();
+      boss.staffTip.getWorldPosition(v);
+      spawnSparks(v, { count: 2, color: 0xffaa33, speed: 1.5, life: 0.35, gravity: -0.6, size: 0.13 });
+    }
+  }
+
+  // Boss 活动范围限制在浅水区内
+  function clampBossPos() {
+    boss.group.position.x = Math.max(BOSS_ARENA_X - 55, Math.min(BOSS_ARENA_X + 55, boss.group.position.x));
+    boss.group.position.z = Math.max(BOSS_ARENA_Z - 55, Math.min(BOSS_ARENA_Z + 55, boss.group.position.z));
+  }
+
+  // 全屏显示 Boss 金色横幅文字
+  function showBossMsg(text) {
+    const el = document.getElementById('bossMsg');
+    el.textContent = text;
+    el.classList.remove('show');
+    void el.offsetWidth;
+    el.classList.add('show');
+  }
+
+  // Boss 登场低吼
+  function playBossRoarSound() {
+    if (!audioCtx) return;
+    const t0 = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(90, t0);
+    osc.frequency.exponentialRampToValueAtTime(45, t0 + 1.2);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(0.5, t0 + 0.15);
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + 1.3);
+    osc.connect(g).connect(audioCtx.destination);
+    osc.start(t0);
+    osc.stop(t0 + 1.4);
+  }
+
+  // 挥棍破空声
+  function playMeleeSound() {
+    if (!audioCtx) return;
+    const t0 = audioCtx.currentTime;
+    if (noiseBuffer) {
+      const src = audioCtx.createBufferSource();
+      src.buffer = noiseBuffer;
+      const filter = audioCtx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.setValueAtTime(400, t0);
+      filter.frequency.exponentialRampToValueAtTime(1800, t0 + 0.2);
+      const g = audioCtx.createGain();
+      g.gain.setValueAtTime(0.4, t0);
+      g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.25);
+      src.connect(filter).connect(g).connect(audioCtx.destination);
+      src.start(t0, Math.random());
+      src.stop(t0 + 0.3);
+    }
+  }
+
+  // 冲撞蓄力低鸣
+  function playChargeSound() {
+    if (!audioCtx) return;
+    const t0 = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(120, t0);
+    osc.frequency.exponentialRampToValueAtTime(60, t0 + 0.4);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(0.3, t0 + 0.1);
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.5);
+    osc.connect(g).connect(audioCtx.destination);
+    osc.start(t0);
+    osc.stop(t0 + 0.55);
+  }
+
+  // 棍气波发射：快速上升的尖鸣
+  function playWaveSound() {
+    if (!audioCtx) return;
+    const t0 = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(300, t0);
+    osc.frequency.exponentialRampToValueAtTime(900, t0 + 0.25);
+    g.gain.setValueAtTime(0.25, t0);
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.3);
+    osc.connect(g).connect(audioCtx.destination);
+    osc.start(t0);
+    osc.stop(t0 + 0.35);
+  }
+
+  // ---------- 6.14 Boss 奖励与回归增幅（P3） ----------
+
+  // 击败 Boss 的永久奖励：生命上限 +20% 并回满；全武器伤害永久 +10%
+  function applyBossRewards() {
+    maxHealth = Math.round(MAX_HEALTH * 1.2); // 永久生命上限 +20%
+    health = maxHealth;                        // 并回满
+    weaponDamageBonus += 0.10;                 // 全武器伤害永久 +10%
+  }
+
+  // 回归后普通敌人大幅增强：血量 ×2、伤害 ×1.5、移速 +30%、命中率 +20%
+  // 用“乘算”叠加：与地狱难度（×3 等）可正确相乘（P6）
+  function applyEnemyBuffs() {
+    enemyHpMult *= 2;
+    enemyDmgMult *= 1.5;
+    enemySpeedMult *= 1.3;
+    enemyAccBonus += 0.2;
+    for (const e of enemies) {
+      e.maxHp = Math.round(ENEMY_MAX_HP * enemyHpMult);
+      if (e.alive) e.hp = e.maxHp; // 立刻补满新血量
+    }
+  }
+
+  // 击败 Boss 特殊胜利音效：上扬的号角
+  function playBossVictorySound() {
+    if (!audioCtx) return;
+    const t0 = audioCtx.currentTime;
+    [392, 523, 659, 784, 1046].forEach((f, i) => {
+      const osc = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.value = f;
+      const t = t0 + i * 0.12;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.22, t + 0.03);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+      osc.connect(g).connect(audioCtx.destination);
+      osc.start(t);
+      osc.stop(t + 0.55);
+    });
+  }
+
+  // ---------- 6.15 弹窗选择系统（P4：每 5 级强化三选一） ----------
+
+  // 把弹窗配置推入队列；若当前没在弹窗就立即显示
+  function queueModal(config) {
+    modalQueue.push(config);
+    if (!modalActive) showNextModal();
+  }
+
+  // 显示队列里的下一个弹窗：暂停世界，渲染三项选项
+  function showNextModal() {
+    if (modalActive || modalQueue.length === 0) return;
+    currentModal = modalQueue.shift();
+    modalActive = true;
+    paused = true; // 弹窗期间世界完全冻结（复用 P0 暂停基建）
+    document.getElementById('choiceTitle').textContent = currentModal.title;
+    document.getElementById('choiceSub').textContent = currentModal.sub;
+    for (let i = 0; i < 3; i++) {
+      const row = document.getElementById('optRow' + i);
+      if (currentModal.options[i]) {
+        row.classList.remove('hidden');
+        document.getElementById('optName' + i).textContent = currentModal.options[i].name;
+        document.getElementById('optDesc' + i).textContent = currentModal.options[i].desc;
+      } else {
+        row.classList.add('hidden'); // 选项不足 3 个时隐藏该行（P6 路线只有 2 项）
+      }
+    }
+    // 金色弹窗（专武）：标题/边框换金色（扩展）
+    const box = document.getElementById('modalBox');
+    if (currentModal.gold) box.classList.add('gold');
+    else box.classList.remove('gold');
+    document.getElementById('choiceModal').classList.remove('hidden');
+  }
+
+  // 选择第 i 项：应用效果 → 关弹窗 → 排队显示下一个（没有则恢复游戏）
+  function chooseOption(i) {
+    if (!modalActive || !currentModal) return;
+    const opt = currentModal.options[i];
+    if (opt && opt.apply) opt.apply();
+    modalActive = false;
+    currentModal = null;
+    document.getElementById('choiceModal').classList.add('hidden');
+    if (modalQueue.length > 0) {
+      showNextModal(); // 保持暂停，排队显示下一个
+    } else {
+      paused = !locked; // 恢复游戏（若鼠标已解锁则保持暂停菜单）
+    }
+  }
+
+  // 每 5 级强化三选一：预生成三个选项（数值随机）
+  function queueUpgradeModal() {
+    const hpGain = 10 + Math.floor(Math.random() * 21);                       // 10~30
+    const dmgGain = Math.round((0.05 + Math.random() * 0.10) * 100) / 100;    // 5%~15%
+    queueModal({
+      title: '等级强化 · Lv.' + level,
+      sub: '升级到 ' + level + ' 级，选择一个强化',
+      options: [
+        { name: '① 生命提升', desc: '生命上限 +' + hpGain + '，并回复等量生命', apply: () => { maxHealth += hpGain; health = Math.min(maxHealth, health + hpGain); } },
+        { name: '② 体力恢复', desc: '体力回复速度 +25%', apply: () => { staminaRegenMult += 0.25; } },
+        { name: '③ 枪械伤害', desc: '全武器伤害 +' + Math.round(dmgGain * 100) + '%', apply: () => { weaponDamageBonus += dmgGain; } }
+      ]
+    });
+  }
+
+  // ---------- 6.16 武器专精（P5：15 级三选一） ----------
+
+  // 15 级武器专精：三选一（永久生效，与 P4 强化弹窗排队显示）
+  function queueSpecializationModal() {
+    queueModal({
+      title: '武器专精 · Lv.15',
+      sub: '选择一把武器进行专精（永久）',
+      options: [
+        { name: '① 专精步枪', desc: '步枪伤害 +40%，射速 +25%', apply: () => { weaponSpecs.rifle.dmgMult *= 1.4; weaponSpecs.rifle.fireMult *= 1.25; } },
+        { name: '② 专精霰弹枪', desc: '霰弹伤害 +40%，弹丸 +2', apply: () => { weaponSpecs.shotgun.dmgMult *= 1.4; weaponSpecs.shotgun.pelletsBonus += 2; } },
+        { name: '③ 专精狙击枪', desc: '狙击伤害 +50%，换弹时间 -40%', apply: () => { weaponSpecs.sniper.dmgMult *= 1.5; weaponSpecs.sniper.reloadMult *= 0.6; } }
+      ]
+    });
+  }
+
+  // ---------- 6.17 路线选择（P6：20 级二选一） ----------
+
+  // 20 级路线选择：继续发育 / 地狱难度（与强化/专精弹窗排队显示）
+  function queueRouteModal() {
+    queueModal({
+      title: '路线选择 · Lv.20',
+      sub: '选择你之后的战斗路线（永久，整局生效）',
+      options: [
+        { name: '① 继续发育', desc: '无额外效果，稳步发育', apply: () => { showBossMsg('继续发育，稳步变强'); } },
+        { name: '② 地狱难度', desc: '敌人血量×3、伤害×2、移速+50%，但击杀经验×2', apply: () => { applyHellMode(); } }
+      ]
+    });
+  }
+
+  // 地狱难度：敌人大幅增强 + 击杀经验翻倍（立即生效）
+  function applyHellMode() {
+    killXpMult = 2;        // 击杀经验 ×2
+    enemyHpMult *= 3;      // 敌人血量 ×3
+    enemyDmgMult *= 2;     // 敌人伤害 ×2
+    enemySpeedMult *= 1.5; // 敌人移速 +50%
+    // 立即应用到当前存活敌人
+    for (const e of enemies) {
+      e.maxHp = Math.round(ENEMY_MAX_HP * enemyHpMult);
+      if (e.alive) e.hp = e.maxHp;
+    }
+    showBossMsg('地狱难度已开启！敌人大幅增强 · 击杀经验 ×2');
+  }
+
+  // ---------- 6.18 专属武器（扩展：25 / 35 级金色弹窗） ----------
+
+  // 25 / 35 级专属武器选择：金色弹窗，三选一（永久，与强化弹窗排队显示）
+  function queueWeaponSoulModal(tier) {
+    queueModal({
+      gold: true,
+      title: '请选择你的专武',
+      sub: 'Lv.' + tier + ' · 选择你的专属武器（永久）',
+      options: [
+        { name: '① 专精步枪 LV' + tier, desc: '伤害再提升 10%', apply: () => { weaponSpecs.rifle.dmgMult *= 1.1; } },
+        { name: '② 专精霰弹枪 LV' + tier, desc: '打击速度提升 12%', apply: () => { weaponSpecs.shotgun.fireMult *= 1.12; } },
+        { name: '③ 专精狙击枪 LV' + tier, desc: '打击有概率回复生命值', apply: () => { weaponSpecs.sniper.lifesteal = Math.min(1, weaponSpecs.sniper.lifesteal + 0.2); } }
+      ]
+    });
   }
 
   // ---------- 7. 每帧更新：特效生命周期 + 动画 ----------
@@ -2142,6 +3246,8 @@
 
     // 柱子呼吸灯动画
     updatePillarPulse(dt);
+    // 伤害飘字更新（上浮 + 渐隐，P1）
+    updateDamageNumbers(dt);
   }
 
   // 让霓虹柱子的光环缓慢“呼吸”（用 sin 函数改变亮度和大小）
@@ -2165,12 +3271,23 @@
 
     const dt = Math.min(clock.getDelta(), 0.05); // 限制最大时间差，防止切后台后“瞬移”
 
+    // P0：暂停（开始界面 / 按 Esc）时游戏世界完全冻结：敌人 AI、敌我子弹、
+    // 命中判定、所有计时器全部停止，只保留渲染和暂停界面
+    if (paused) {
+      renderer.render(scene, camera);
+      return;
+    }
+
     updatePlayerLife(dt);        // 玩家死亡 / 重生
     if (!playerDead) {
       updateBody(dt);            // 冲刺 / 滑铲 / 体力 / 眼睛高度 / FOV
       updateMovement(dt);        // 玩家移动 + 跳跃重力 + 碰撞
     }
-    updateEnemies(dt);           // 敌人 AI / 血条 / 闪白 / 重生
+    if (bossFightActive) {
+      updateBoss(dt);            // Boss AI / 棍气波 / 火焰（P2）
+    } else {
+      updateEnemies(dt);         // 普通敌人 AI / 血条 / 闪白 / 重生
+    }
     updateEffects(dt);           // 弹道 / 火花 / 爆炸 / 闪光 / 后坐 / 靶子 / 柱子
     updateHUD();                 // 血条 + 体力条
     updateReload(dt);            // 换弹倒计时
@@ -2295,6 +3412,7 @@
   // 整个游戏的启动函数
   function init() {
     try {
+      maxHealth = MAX_HEALTH; // 同步初始生命上限（MAX_HEALTH 在全局变量区后面声明）
       initRenderer();   // 1. 渲染器
       initScene();      // 2. 场景 + 灯光 + 雾
       initCamera();     // 3. 相机
